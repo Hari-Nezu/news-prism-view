@@ -1,3 +1,6 @@
+
+![version](https://img.shields.io/badge/version-0.1.0-blue)
+
 # NewsPrism
 
 ニュースを **3つの軸（経済・社会・外交安保）** で分析し、背景思想を理解しながら記事を読むツールです。
