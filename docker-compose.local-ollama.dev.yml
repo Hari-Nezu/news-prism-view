@@ -1,0 +1,16 @@
+# ホスト Ollama + ホットリロード開発用オーバーライド
+#
+# 使い方:
+#   docker compose -f docker-compose.local-ollama.yml -f docker-compose.local-ollama.dev.yml up
+services:
+  app:
+    build:
+      context: .
+      target: deps
+    command: npm run dev
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - OLLAMA_BASE_URL=http://host-gateway:11434

@@ -1,0 +1,82 @@
+services:
+  db-migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      - DATABASE_URL=postgresql://newsprism:newsprism@db:5432/newsprism
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
+      - EMBED_MODEL=${EMBED_MODEL:-nomic-embed-text}
+      - DATABASE_URL=postgresql://newsprism:newsprism@db:5432/newsprism
+      - NEWSDATA_API_KEY=${NEWSDATA_API_KEY:-}
+    depends_on:
+      ollama-init:
+        condition: service_completed_successfully
+      db-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      # コンテナ間リクエストを許可
+      - OLLAMA_ORIGINS=*
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # LLMモデルと埋め込みモデルを両方Pull
+  ollama-init:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
+      - EMBED_MODEL=${EMBED_MODEL:-nomic-embed-text}
+    entrypoint: >
+      sh -c "ollama pull $${OLLAMA_MODEL:-llama3.2} && ollama pull $${EMBED_MODEL:-nomic-embed-text}"
+    restart: "no"
+
+  db:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: newsprism
+      POSTGRES_USER: newsprism
+      POSTGRES_PASSWORD: newsprism
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newsprism -d newsprism"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  ollama_data:
+  pgdata:
