@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractWords, filterByKeyword } from "./compare-filter";
+import { extractWords, filterByKeyword } from "@/lib/compare-filter";
 import type { RssFeedItem } from "@/types";
 
 // ── テスト用フィクスチャ ────────────────────────────────

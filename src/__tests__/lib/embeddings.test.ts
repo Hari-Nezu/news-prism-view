@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
-import { embedArticle, embedNewsGroup } from "./embeddings";
+import { embedArticle, embedNewsGroup } from "@/lib/embeddings";
 
 const MOCK_VEC = [0.1, 0.2, 0.3];
 

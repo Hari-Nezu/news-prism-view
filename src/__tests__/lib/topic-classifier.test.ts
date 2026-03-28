@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyTopic, getTopicDef, TOPICS, TOPIC_ORDER } from "./topic-classifier";
+import { classifyTopic, getTopicDef, TOPICS, TOPIC_ORDER } from "@/lib/topic-classifier";
 
 describe("classifyTopic", () => {
   it("災害キーワードで disaster を返す", () => {
