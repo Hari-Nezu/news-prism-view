@@ -3,6 +3,7 @@ import type { RssFeedItem } from "@/types";
 import { ALL_FEED_SOURCES, DEFAULT_ENABLED_IDS, type FeedConfig } from "./feed-configs";
 import { fetchNewsdataArticles } from "./newsdata-client";
 import { classifyTopic } from "./topic-classifier";
+import { validatePublicUrl } from "./article-fetcher";
 
 const parser = new Parser({
   timeout: 10000,
@@ -76,6 +77,7 @@ export async function fetchRssFeed(
   sourceName: string,
   filterPolitical = true
 ): Promise<RssFeedItem[]> {
+  validatePublicUrl(feedUrl);
   const feed = await parser.parseURL(feedUrl);
 
   const items = (feed.items ?? []).map((item) => {

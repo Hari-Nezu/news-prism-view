@@ -2,10 +2,52 @@ import * as cheerio from "cheerio";
 import type { Article } from "@/types";
 
 /**
+ * SSRF対策: ユーザー指定URLがプライベートネットワークを指していないか検証する。
+ * - http / https 以外のプロトコルを拒否
+ * - ループバック・RFC1918・リンクローカル（AWS メタデータ含む）を拒否
+ */
+export function validatePublicUrl(urlStr: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlStr);
+  } catch {
+    throw new Error("無効なURLです");
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("http/https 以外のプロトコルは許可されていません");
+  }
+
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, ""); // IPv6ブラケット除去
+
+  const BLOCKED_HOSTS = ["localhost", "metadata.google.internal", "::1"];
+  if (BLOCKED_HOSTS.includes(host)) {
+    throw new Error("このURLへのアクセスは許可されていません");
+  }
+
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+    if (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254)
+    ) {
+      throw new Error("プライベートIPアドレスへのアクセスは許可されていません");
+    }
+  }
+}
+
+/**
  * URLから記事本文を取得する
  * スクレイピングではなく、公開HTMLの本文テキスト抽出
  */
 export async function fetchArticleFromUrl(url: string): Promise<Article> {
+  validatePublicUrl(url);
+
   const response = await fetch(url, {
     headers: {
       "User-Agent":
