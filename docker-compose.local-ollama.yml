@@ -1,0 +1,59 @@
+# ホストで起動済みの Ollama を使う構成
+# Ollama・ollama-init は起動しない
+#
+# 使い方:
+#   docker compose -f docker-compose.local-ollama.yml up
+#
+# 前提:
+#   - ホストで Ollama が 11434 ポートで起動済み
+#   - 必要なモデルが pull 済み（llama3.2, nomic-embed-text）
+services:
+  db-migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      - DATABASE_URL=postgresql://newsprism:newsprism@db:5432/newsprism
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # host-gateway でホストの Ollama に接続
+      - OLLAMA_BASE_URL=http://host-gateway:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
+      - EMBED_MODEL=${EMBED_MODEL:-nomic-embed-text}
+      - DATABASE_URL=postgresql://newsprism:newsprism@db:5432/newsprism
+      - NEWSDATA_API_KEY=${NEWSDATA_API_KEY:-}
+    extra_hosts:
+      - "host-gateway:host-gateway"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  db:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: newsprism
+      POSTGRES_USER: newsprism
+      POSTGRES_PASSWORD: newsprism
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newsprism -d newsprism"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

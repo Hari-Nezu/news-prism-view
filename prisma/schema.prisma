@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// 分析済み記事（メインページ）
+model Article {
+  id             String   @id @default(cuid())
+  title          String
+  content        String
+  url            String?
+  source         String?
+  publishedAt    String?
+  analyzedAt     DateTime @default(now())
+
+  // 3軸スコア
+  economic       Float
+  social         Float
+  diplomatic     Float
+  emotionalTone  Float
+  biasWarning    Boolean
+  confidence     Float
+  summary        String
+  counterOpinion String
+
+  // 埋め込みベクトル（nomic-embed-text = 768次元）
+  // Prisma未対応型のため INSERT/SELECT は生SQL で処理
+  embedding      Unsupported("vector(768)")?
+
+  @@index([url])
+  @@index([analyzedAt(sort: Desc)])
+}
+
+/// メディア比較セッション（比較ページ）
+model CompareSession {
+  id      String   @id @default(cuid())
+  keyword String
+  savedAt DateTime @default(now())
+
+  // NewsGroup[] を JSON で保存
+  groups  Json
+
+  results    CompareResult[]
+  newsGroups CompareGroupRecord[]
+
+  @@index([savedAt(sort: Desc)])
+}
+
+/// グループ化されたニュースイベント（ベクトル検索用）
+model CompareGroupRecord {
+  id           String         @id @default(cuid())
+  session      CompareSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId    String
+
+  groupTitle   String
+  singleOutlet Boolean
+  itemCount    Int
+  /// 参加媒体名の配列を JSON で保存
+  sources      Json
+
+  savedAt      DateTime @default(now())
+
+  // 埋め込みベクトル（グループタイトル + 記事タイトル群 + 媒体名）
+  embedding    Unsupported("vector(768)")?
+
+  @@index([savedAt(sort: Desc)])
+}
+
+/// 比較セッション内の各媒体分析結果
+model CompareResult {
+  id             String         @id @default(cuid())
+  session        CompareSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId      String
+
+  title          String
+  url            String?
+  source         String?
+  publishedAt    String?
+  analyzedAt     DateTime       @default(now())
+
+  economic       Float
+  social         Float
+  diplomatic     Float
+  emotionalTone  Float
+  biasWarning    Boolean
+  confidence     Float
+  summary        String
+  counterOpinion String
+
+  embedding      Unsupported("vector(768)")?
+}
