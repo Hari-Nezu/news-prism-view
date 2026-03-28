@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getSourceColors, getChartColor } from "./source-colors";
+import { getSourceColors, getChartColor } from "@/lib/source-colors";
 
 describe("getSourceColors", () => {
   it("主要媒体は固定カラーを返す", () => {
