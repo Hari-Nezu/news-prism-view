@@ -3,6 +3,19 @@
 import { useEffect, useRef } from "react";
 import * as d3 from "d3";
 import type { AnalyzedArticle } from "@/types";
+import type { MultiModelAnalyzedArticle } from "@/types";
+
+const MODEL_COLORS: Record<string, string> = {
+  "gemma3:12b":  "#ef4444",
+  "qwen3.5:4b":  "#22c55e",
+  "llama3.2":    "#a855f7",
+};
+
+const MODEL_LABELS: Record<string, string> = {
+  "gemma3:12b":  "Gemma 3",
+  "qwen3.5:4b":  "Qwen 3.5",
+  "llama3.2":    "Llama 3.2",
+};
 
 interface Props {
   articles: AnalyzedArticle[];
@@ -166,6 +179,48 @@ function drawPlot(
     const cy = yScale(yVal);
     const isSelected = i === selectedIndex;
 
+    // マルチモデル: 三角形 + 個別ドット
+    const mm = (article as MultiModelAnalyzedArticle).multiModel;
+    if (mm && mm.results.length > 1) {
+      const points = mm.results.map((r) => ({
+        x: xScale(r.scores[config.xKey]),
+        y: yScale(r.scores[config.yKey]),
+        model: r.model,
+      }));
+
+      // 三角形（モデル間のばらつき可視化）
+      if (points.length >= 3) {
+        g.append("polygon")
+          .attr("points", points.map((p) => `${p.x},${p.y}`).join(" "))
+          .attr("fill", isSelected ? "#3b82f6" : "#6b7280")
+          .attr("fill-opacity", 0.08)
+          .attr("stroke", isSelected ? "#3b82f6" : "#9ca3af")
+          .attr("stroke-opacity", 0.3)
+          .attr("stroke-width", 1);
+      } else {
+        // 2モデルの場合は線で繋ぐ
+        g.append("line")
+          .attr("x1", points[0].x).attr("y1", points[0].y)
+          .attr("x2", points[1].x).attr("y2", points[1].y)
+          .attr("stroke", isSelected ? "#3b82f6" : "#9ca3af")
+          .attr("stroke-opacity", 0.3)
+          .attr("stroke-width", 1);
+      }
+
+      // 各モデルの小ドット
+      points.forEach((p) => {
+        const color = MODEL_COLORS[p.model] ?? "#6b7280";
+        g.append("circle")
+          .attr("cx", p.x).attr("cy", p.y)
+          .attr("r", 4)
+          .attr("fill", color)
+          .attr("stroke", "white")
+          .attr("stroke-width", 1)
+          .attr("opacity", isSelected ? 1 : 0.7);
+      });
+    }
+
+    // コンセンサス点（番号付き）
     const pointG = g.append("g")
       .attr("transform", `translate(${cx},${cy})`)
       .style("cursor", "pointer")
@@ -194,6 +249,27 @@ function drawPlot(
       .attr("font-weight", "bold")
       .text(i + 1);
   });
+
+  // マルチモデル凡例（少なくとも1記事がmultiModelを持つ場合）
+  const hasMultiModel = articles.some((a) => (a as MultiModelAnalyzedArticle).multiModel?.results?.length);
+  if (hasMultiModel) {
+    const legendG = svg.append("g")
+      .attr("transform", `translate(${MARGIN.left}, ${SIZE - 8})`);
+
+    const models = Object.entries(MODEL_COLORS);
+    models.forEach(([model, color], idx) => {
+      const x = idx * 80;
+      legendG.append("circle")
+        .attr("cx", x).attr("cy", 0)
+        .attr("r", 3)
+        .attr("fill", color);
+      legendG.append("text")
+        .attr("x", x + 6).attr("y", 3)
+        .attr("font-size", 8)
+        .attr("fill", "#9ca3af")
+        .text(MODEL_LABELS[model] ?? model);
+    });
+  }
 }
 
 export default function PositioningPlot({ articles, selectedIndex, onSelect }: Props) {

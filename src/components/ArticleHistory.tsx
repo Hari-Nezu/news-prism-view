@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { AnalyzedArticle } from "@/types";
+import { getTopicDef } from "@/lib/topic-classifier";
+import type { TopicId } from "@/lib/topic-classifier";
 
 interface Props {
   onRestore: (article: AnalyzedArticle) => void;
@@ -30,6 +32,14 @@ export default function ArticleHistory({ onRestore }: Props) {
   const scoreLabel = (val: number) =>
     val > 0.3 ? "革新" : val < -0.3 ? "保守" : "中立";
 
+  // トピック別にグループ化
+  const grouped = articles.reduce<Record<string, AnalyzedArticle[]>>((acc, a) => {
+    const key = a.topic ?? "other";
+    (acc[key] ??= []).push(a);
+    return acc;
+  }, {});
+  const topicKeys = Object.keys(grouped);
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       <button
@@ -49,36 +59,49 @@ export default function ArticleHistory({ onRestore }: Props) {
             </button>
           </div>
 
-          <ul className="divide-y divide-gray-50 max-h-80 overflow-y-auto">
+          <div className="max-h-80 overflow-y-auto">
             {articles.length === 0 && !isLoading && (
-              <li className="px-4 py-6 text-center text-xs text-gray-400">
+              <p className="px-4 py-6 text-center text-xs text-gray-400">
                 分析履歴がありません
-              </li>
+              </p>
             )}
-            {articles.map((a, i) => (
-              <li key={i}
-                className="px-4 py-3 hover:bg-blue-50 transition-colors cursor-pointer"
-                onClick={() => onRestore(a)}
-              >
-                <p className="text-xs font-medium text-gray-800 line-clamp-1 mb-1">
-                  {a.title}
-                </p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {a.source && (
-                    <span className="text-[10px] text-blue-600 font-medium">{a.source}</span>
-                  )}
-                  <span className="text-[10px] text-gray-400 font-mono">
-                    経{scoreLabel(a.analysis.scores.economic)}
-                    ／社{scoreLabel(a.analysis.scores.social)}
-                    ／外{scoreLabel(a.analysis.scores.diplomatic)}
-                  </span>
-                  <span className="text-[10px] text-gray-400 ml-auto">
-                    {new Date(a.analyzedAt).toLocaleDateString("ja-JP")}
-                  </span>
+            {topicKeys.map((topicKey) => {
+              const def = getTopicDef(topicKey as TopicId);
+              return (
+                <div key={topicKey}>
+                  <div className="px-4 py-1 bg-gray-50 border-t border-gray-100 flex items-center gap-1">
+                    <span className="text-xs">{def.icon}</span>
+                    <span className="text-[11px] font-semibold text-gray-500">{def.label}</span>
+                  </div>
+                  <ul className="divide-y divide-gray-50">
+                    {grouped[topicKey].map((a, i) => (
+                      <li key={i}
+                        className="px-4 py-3 hover:bg-blue-50 transition-colors cursor-pointer"
+                        onClick={() => onRestore(a)}
+                      >
+                        <p className="text-xs font-medium text-gray-800 line-clamp-1 mb-1">
+                          {a.title}
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {a.source && (
+                            <span className="text-[10px] text-blue-600 font-medium">{a.source}</span>
+                          )}
+                          <span className="text-[10px] text-gray-400 font-mono">
+                            経{scoreLabel(a.analysis.scores.economic)}
+                            ／社{scoreLabel(a.analysis.scores.social)}
+                            ／外{scoreLabel(a.analysis.scores.diplomatic)}
+                          </span>
+                          <span className="text-[10px] text-gray-400 ml-auto">
+                            {new Date(a.analyzedAt).toLocaleDateString("ja-JP")}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </li>
-            ))}
-          </ul>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

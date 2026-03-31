@@ -54,9 +54,19 @@ const SYSTEM_PROMPT = `あなたは政治・社会・外交のポジショニン
 
 bias_warningは emotional_tone が 0.6 以上または -0.6 以下の場合に true にしてください。`;
 
+export const MULTI_MODELS = (process.env.MULTI_MODELS ?? "gemma3:12b,qwen3.5:4b,llama3.2").split(",").map(s => s.trim());
+
+/** モデルの表示ラベル・色 */
+export const MODEL_META: Record<string, { label: string; color: string }> = {
+  "gemma3:12b":  { label: "Gemma 3",   color: "#ef4444" },  // 赤
+  "qwen3.5:4b":  { label: "Qwen 3.5",  color: "#22c55e" },  // 緑
+  "llama3.2":    { label: "Llama 3.2",  color: "#a855f7" },  // 紫
+};
+
 export async function analyzeArticle(
   title: string,
-  content: string
+  content: string,
+  model?: string
 ): Promise<AnalysisResult> {
   const userPrompt = `以下のニュース記事を分析してください。
 
@@ -69,7 +79,7 @@ ${content.slice(0, 3000)}`;
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: OLLAMA_MODEL,
+      model: model ?? OLLAMA_MODEL,
       system: SYSTEM_PROMPT,
       prompt: userPrompt,
       stream: false,
@@ -77,7 +87,9 @@ ${content.slice(0, 3000)}`;
       options: {
         temperature: 0.1,
         top_p: 0.9,
+        num_predict: 1024,
       },
+      think: false,
     }),
   });
 
@@ -102,6 +114,26 @@ ${content.slice(0, 3000)}`;
     counterOpinion: parsed.counter_opinion,
     confidence: parsed.confidence,
   };
+}
+
+/**
+ * 複数モデルで順次分析し、1モデルずつ結果をyieldする
+ */
+export async function* analyzeArticleMultiModel(
+  title: string,
+  content: string,
+  models: string[] = MULTI_MODELS
+): AsyncGenerator<{ model: string; result: AnalysisResult; index: number; total: number }> {
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    try {
+      const result = await analyzeArticle(title, content, model);
+      yield { model, result, index: i, total: models.length };
+    } catch (err) {
+      console.error(`[multiModel] ${model} 分析失敗:`, err);
+      // モデルが使えない場合はスキップ
+    }
+  }
 }
 
 export async function checkOllamaHealth(): Promise<boolean> {

@@ -1,11 +1,11 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import type { AnalyzedArticle, NewsGroup } from "@/types";
+import type { AnalyzedArticle, NewsGroup, RssFeedItem } from "@/types";
 
 // PrismaClient レイジーシングルトン
 // スキーマ変更後に prisma generate を実行した場合、dev サーバーの再起動が必要。
 // （globalThis はHMR をまたいで保持されるため、古いインスタンスがキャッシュされ続ける）
-const PRISMA_CACHE_KEY = "prisma_v3"; // スキーマ変更時にインクリメントする
+const PRISMA_CACHE_KEY = "prisma_v5"; // スキーマ変更時にインクリメントする
 const globalForPrisma = globalThis as unknown as Record<string, PrismaClient | undefined>;
 
 function getPrisma(): PrismaClient {
@@ -32,7 +32,7 @@ export async function saveArticle(
   article: AnalyzedArticle,
   embedding?: number[]
 ): Promise<string> {
-  const { title, content, url, source, publishedAt, analysis } = article;
+  const { title, content, url, source, publishedAt, analysis, topic } = article;
 
   const saved = await getPrisma().article.create({
     data: {
@@ -41,6 +41,7 @@ export async function saveArticle(
       url: url ?? null,
       source: source ?? null,
       publishedAt: publishedAt ?? null,
+      topic: topic ?? null,
       economic:      analysis.scores.economic,
       social:        analysis.scores.social,
       diplomatic:    analysis.scores.diplomatic,
@@ -77,6 +78,7 @@ export async function getRecentArticles(limit = 30): Promise<AnalyzedArticle[]> 
       source: true,
       publishedAt: true,
       analyzedAt: true,
+      topic: true,
       economic: true,
       social: true,
       diplomatic: true,
@@ -254,7 +256,152 @@ export async function findSimilarGroups(
   }));
 }
 
+// ── FeedGroup ───────────────────────────────────────────
+
+export interface FeedGroupRecord {
+  id:           string;
+  title:        string;
+  articleCount: number;
+  embedding:    number[];
+}
+
+/** lastSeenAt 14日以内のアクティブなグループを取得（embedding必須） */
+export async function getActiveFeedGroups(): Promise<FeedGroupRecord[]> {
+  const rows = await getPrisma().$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT id, title, "articleCount", embedding::text AS embedding_str
+     FROM "FeedGroup"
+     WHERE "lastSeenAt" > NOW() - INTERVAL '14 days'
+       AND embedding IS NOT NULL`
+  );
+  return rows.flatMap((r) => {
+    const vec = parseVectorString(r.embedding_str);
+    if (!vec) return [];
+    return [{
+      id:           String(r.id),
+      title:        String(r.title),
+      articleCount: Number(r.articleCount),
+      embedding:    vec,
+    }];
+  });
+}
+
+/** 新規 FeedGroup を作成し ID を返す */
+export async function createFeedGroup(
+  title: string,
+  embedding: number[] | null
+): Promise<string> {
+  const row = await getPrisma().feedGroup.create({ data: { title } });
+  if (embedding && embedding.length > 0) {
+    await getPrisma().$executeRawUnsafe(
+      `UPDATE "FeedGroup" SET embedding = $1::vector WHERE id = $2`,
+      `[${embedding.join(",")}]`,
+      row.id
+    );
+  }
+  return row.id;
+}
+
+/** centroid と articleCount、lastSeenAt を更新 */
+export async function updateFeedGroupCentroid(
+  id: string,
+  embedding: number[],
+  articleCount: number
+): Promise<void> {
+  await getPrisma().$executeRawUnsafe(
+    `UPDATE "FeedGroup"
+     SET embedding = $1::vector, "articleCount" = $2, "lastSeenAt" = NOW()
+     WHERE id = $3`,
+    `[${embedding.join(",")}]`,
+    articleCount,
+    id
+  );
+}
+
+/** FeedGroupItem を重複スキップで一括保存 */
+export async function upsertFeedGroupItems(
+  groupId: string,
+  items: RssFeedItem[]
+): Promise<void> {
+  if (items.length === 0) return;
+  await getPrisma().feedGroupItem.createMany({
+    data: items.map((item) => ({
+      groupId,
+      title:       item.title,
+      url:         item.url,
+      source:      item.source,
+      publishedAt: item.publishedAt ?? null,
+    })),
+    skipDuplicates: true,
+  });
+}
+
+/** lastSeenAt 30日以上のグループを削除 */
+export async function deleteStaleFeedGroups(): Promise<void> {
+  await getPrisma().$executeRawUnsafe(
+    `DELETE FROM "FeedGroup" WHERE "lastSeenAt" < NOW() - INTERVAL '30 days'`
+  );
+}
+
+// ── YouTubeVideo ─────────────────────────────────────────
+
+export interface YouTubeVideoSaveInput {
+  videoId:       string;
+  title:         string;
+  channelName:   string;
+  channelId:     string;
+  description?:  string;
+  thumbnailUrl?: string;
+  publishedAt?:  string;
+  transcript:    string;
+  transcriptType: "transcript" | "description";
+  economic:      number;
+  social:        number;
+  diplomatic:    number;
+  emotionalTone: number;
+  biasWarning:   boolean;
+  confidence:    number;
+  summary:       string;
+  counterOpinion: string;
+  topic?:        string;
+}
+
+/** YouTube 動画分析結果を保存（既存なら更新） */
+export async function saveYouTubeVideo(
+  input: YouTubeVideoSaveInput,
+  embedding?: number[]
+): Promise<string> {
+  const saved = await getPrisma().youTubeVideo.upsert({
+    where: { videoId: input.videoId },
+    create: input,
+    update: {
+      ...input,
+      analyzedAt: new Date(),
+    },
+  });
+
+  if (embedding && embedding.length > 0) {
+    await getPrisma().$executeRawUnsafe(
+      `UPDATE "YouTubeVideo" SET embedding = $1::vector WHERE id = $2`,
+      `[${embedding.join(",")}]`,
+      saved.id
+    );
+  }
+
+  return saved.id;
+}
+
 // ── ヘルパー ────────────────────────────────────────────
+
+function parseVectorString(s: unknown): number[] | null {
+  if (typeof s !== "string") return null;
+  try {
+    const parsed = JSON.parse(s);
+    if (Array.isArray(parsed)) return parsed.map(Number);
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 function rowToAnalyzedArticle(r: Record<string, unknown>): AnalyzedArticle {
   return {
@@ -278,5 +425,6 @@ function rowToAnalyzedArticle(r: Record<string, unknown>): AnalyzedArticle {
     analyzedAt: r.analyzedAt instanceof Date
       ? r.analyzedAt.toISOString()
       : String(r.analyzedAt ?? new Date().toISOString()),
+    topic: r.topic ? String(r.topic) : undefined,
   };
 }

@@ -1,5 +1,14 @@
 import { z } from "zod";
 import type { RssFeedItem, NewsGroup } from "@/types";
+import { embedBatch } from "@/lib/embeddings";
+import {
+  getActiveFeedGroups,
+  createFeedGroup,
+  updateFeedGroupCentroid,
+  upsertFeedGroupItems,
+  deleteStaleFeedGroups,
+  type FeedGroupRecord,
+} from "@/lib/db";
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "llama3.2";
@@ -90,4 +99,157 @@ export async function groupArticlesByEvent(
   });
 
   return groups;
+}
+
+// ── インクリメンタルグループ化 ──────────────────────────
+
+const TIME_WINDOW_MS  = 7  * 24 * 60 * 60 * 1000;
+const MAX_GROUP_SIZE  = 20;
+
+/**
+ * DBのFeedGroupを再利用しながらグループ化する。
+ * - 既存グループに類似する記事はembedding検索でマッチ（Ollama不要）
+ * - マッチしない記事だけOllamaに送り新規グループ作成
+ */
+export async function incrementalGroupArticles(
+  items: RssFeedItem[]
+): Promise<NewsGroup[]> {
+  if (items.length === 0) return [];
+
+  const threshold = parseFloat(
+    process.env.FEED_GROUP_SIMILARITY_THRESHOLD ?? "0.68"
+  );
+
+  // 時間窓フィルタ（古すぎる記事は除外）
+  const recent = items.filter((item) => {
+    if (!item.publishedAt) return true;
+    return Date.now() - new Date(item.publishedAt).getTime() <= TIME_WINDOW_MS;
+  });
+  if (recent.length === 0) return [];
+
+  // 1. 全記事タイトルをバッチembed + 古いグループ削除（並行）
+  const [itemVecs] = await Promise.all([
+    embedBatch(recent.map((i) => i.title)),
+    deleteStaleFeedGroups().catch(() => {}),
+  ]);
+
+  // 2. アクティブなFeedGroupをDBから取得（テーブル未作成時は空配列にフォールバック）
+  const existingGroups = await getActiveFeedGroups().catch((err) => {
+    console.warn("[incrementalGroup] FeedGroup取得失敗（prisma db push が必要な可能性）:", err?.message);
+    return [];
+  });
+
+  // 3. 各記事を既存グループにマッチ or 未マッチに振り分け
+  const unmatched:     RssFeedItem[]       = [];
+  const unmatchedVecs: (number[] | null)[] = [];
+  const assignments    = new Map<string, {
+    group: FeedGroupRecord;
+    items: RssFeedItem[];
+    vecs:  number[][];
+  }>();
+
+  for (let i = 0; i < recent.length; i++) {
+    const item = recent[i];
+    const vec  = itemVecs[i];
+
+    if (!vec || existingGroups.length === 0) {
+      unmatched.push(item);
+      unmatchedVecs.push(vec);
+      continue;
+    }
+
+    let bestSim = 0;
+    let bestGroup: FeedGroupRecord | null = null;
+    for (const g of existingGroups) {
+      if (g.articleCount >= MAX_GROUP_SIZE) continue;
+      const sim = cosineSimilarity(vec, g.embedding);
+      if (sim > bestSim) { bestSim = sim; bestGroup = g; }
+    }
+
+    if (bestSim >= threshold && bestGroup) {
+      const entry = assignments.get(bestGroup.id);
+      if (entry) {
+        entry.items.push(item);
+        entry.vecs.push(vec);
+      } else {
+        assignments.set(bestGroup.id, { group: bestGroup, items: [item], vecs: [vec] });
+      }
+    } else {
+      unmatched.push(item);
+      unmatchedVecs.push(vec);
+    }
+  }
+
+  // 4. マッチしたグループのcentroid更新 & FeedGroupItem保存
+  const matchedGroups: NewsGroup[] = [];
+  for (const [groupId, { group, items: assigned, vecs }] of assignments) {
+    const newCentroid = computeNewCentroid(group.embedding, group.articleCount, vecs);
+    await Promise.all([
+      updateFeedGroupCentroid(groupId, newCentroid, group.articleCount + vecs.length).catch(() => {}),
+      upsertFeedGroupItems(groupId, assigned).catch(() => {}),
+    ]);
+    matchedGroups.push({
+      groupTitle:   group.title,
+      items:        assigned,
+      singleOutlet: new Set(assigned.map((i) => i.source)).size <= 1,
+    });
+  }
+
+  // 5. 未マッチ記事をOllamaで新規グループ化
+  let newGroups: NewsGroup[] = [];
+  if (unmatched.length > 0) {
+    newGroups = await groupArticlesByEvent(unmatched);
+
+    // 新グループをDBに保存（ノンブロッキング）
+    Promise.all(
+      newGroups.map(async (ng) => {
+        const ngVecs = ng.items.flatMap((ngItem) => {
+          const idx = unmatched.findIndex((u) => u.url === ngItem.url);
+          return idx >= 0 && unmatchedVecs[idx] ? [unmatchedVecs[idx]!] : [];
+        });
+        const centroid = ngVecs.length > 0 ? meanVec(ngVecs) : null;
+        const groupId  = await createFeedGroup(ng.groupTitle, centroid);
+        await upsertFeedGroupItems(groupId, ng.items);
+      })
+    ).catch((err) => console.error("[incrementalGroup] DB保存エラー:", err));
+  }
+
+  return [...matchedGroups, ...newGroups];
+}
+
+// ── ベクトル演算ヘルパー ─────────────────────────────────
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot   += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+function meanVec(vecs: number[][]): number[] {
+  const dim    = vecs[0].length;
+  const result = new Array<number>(dim).fill(0);
+  for (const v of vecs) {
+    for (let i = 0; i < dim; i++) result[i] += v[i];
+  }
+  return result.map((x) => x / vecs.length);
+}
+
+function computeNewCentroid(
+  old: number[],
+  n:   number,
+  newVecs: number[][]
+): number[] {
+  if (newVecs.length === 0) return old;
+  const k   = newVecs.length;
+  const dim = old.length;
+  return Array.from({ length: dim }, (_, i) => {
+    let sum = old[i] * n;
+    for (const v of newVecs) sum += v[i];
+    return sum / (n + k);
+  });
 }

@@ -27,12 +27,42 @@ model Article {
   summary        String
   counterOpinion String
 
+  topic          String?
+
   // 埋め込みベクトル（nomic-embed-text = 768次元）
   // Prisma未対応型のため INSERT/SELECT は生SQL で処理
   embedding      Unsupported("vector(768)")?
 
   @@index([url])
   @@index([analyzedAt(sort: Desc)])
+}
+
+/// RSSフィードのニュースイベントグループ（インクリメンタルグループ化用）
+model FeedGroup {
+  id           String          @id @default(cuid())
+  title        String
+  articleCount Int             @default(0)
+  lastSeenAt   DateTime        @default(now())
+  createdAt    DateTime        @default(now())
+  embedding    Unsupported("vector(768)")?
+  items        FeedGroupItem[]
+
+  @@index([lastSeenAt(sort: Desc)])
+}
+
+/// FeedGroup に属する記事（重複防止・centroid更新用）
+model FeedGroupItem {
+  id          String    @id @default(cuid())
+  group       FeedGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId     String
+  title       String
+  url         String
+  source      String
+  publishedAt String?
+  matchedAt   DateTime  @default(now())
+
+  @@unique([groupId, url])
+  @@index([url])
 }
 
 /// メディア比較セッション（比較ページ）
@@ -68,6 +98,37 @@ model CompareGroupRecord {
   embedding    Unsupported("vector(768)")?
 
   @@index([savedAt(sort: Desc)])
+}
+
+/// YouTube 動画の字幕分析結果
+model YouTubeVideo {
+  id             String   @id @default(cuid())
+  videoId        String   @unique       // YouTube video ID (11文字)
+  title          String
+  channelName    String
+  channelId      String                 // YouTube channel ID (UC...)
+  description    String?
+  thumbnailUrl   String?
+  publishedAt    String?
+  transcript     String                 // 分析に使用したテキスト（字幕 or description）
+  transcriptType String   @default("transcript") // "transcript" | "description"
+  analyzedAt     DateTime @default(now())
+
+  economic       Float
+  social         Float
+  diplomatic     Float
+  emotionalTone  Float
+  biasWarning    Boolean
+  confidence     Float
+  summary        String
+  counterOpinion String
+
+  topic          String?
+
+  embedding      Unsupported("vector(768)")?
+
+  @@index([channelId])
+  @@index([analyzedAt(sort: Desc)])
 }
 
 /// 比較セッション内の各媒体分析結果

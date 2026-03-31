@@ -28,6 +28,32 @@ export async function embed(text: string): Promise<number[] | null> {
   }
 }
 
+/**
+ * 複数テキストを一括ベクトル化（1回のOllama呼び出し）
+ * 失敗した要素は null になる
+ */
+export async function embedBatch(texts: string[]): Promise<(number[] | null)[]> {
+  if (texts.length === 0) return [];
+  try {
+    const res = await fetch(`${OLLAMA_BASE_URL}/api/embed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: EMBED_MODEL,
+        input: texts.map((t) => t.slice(0, 2000)),
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) return texts.map(() => null);
+    const data = await res.json();
+    const embeddings: (number[] | null)[] = data.embeddings ?? [];
+    while (embeddings.length < texts.length) embeddings.push(null);
+    return embeddings;
+  } catch {
+    return texts.map(() => null);
+  }
+}
+
 /** タイトル + サマリーを結合してベクトル化（記事検索用） */
 export async function embedArticle(
   title: string,
