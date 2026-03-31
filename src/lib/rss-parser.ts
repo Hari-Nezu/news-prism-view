@@ -2,7 +2,7 @@ import Parser from "rss-parser";
 import type { RssFeedItem } from "@/types";
 import { ALL_FEED_SOURCES, DEFAULT_ENABLED_IDS, type FeedConfig } from "./feed-configs";
 import { fetchNewsdataArticles } from "./newsdata-client";
-import { classifyTopic } from "./topic-classifier";
+import { classifyArticlesBatchLLM } from "./news-classifier-llm";
 import { validatePublicUrl } from "./article-fetcher";
 
 const parser = new Parser({
@@ -80,7 +80,7 @@ export async function fetchRssFeed(
   validatePublicUrl(feedUrl);
   const feed = await parser.parseURL(feedUrl);
 
-  const items = (feed.items ?? []).map((item) => {
+  const rawItems = (feed.items ?? []).map((item) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const raw = item as any;
     const imageUrl: string | undefined =
@@ -98,14 +98,20 @@ export async function fetchRssFeed(
       publishedAt: item.pubDate ?? item.isoDate ?? undefined,
       source: sourceName,
       imageUrl,
-      topic: classifyTopic(title, summary),
     };
   });
 
   const isAlreadyFiltered = sourceName.startsWith("NHK");
-  if (!filterPolitical || isAlreadyFiltered) return items.slice(0, 10);
+  const filtered = (!filterPolitical || isAlreadyFiltered)
+    ? rawItems.slice(0, 10)
+    : rawItems.filter((item) => isPolitical(item.title, item.summary)).slice(0, 10);
 
-  return items.filter((item) => isPolitical(item.title, item.summary)).slice(0, 10);
+  const classifications = await classifyArticlesBatchLLM(filtered);
+  return filtered.map((item, i) => ({
+    ...item,
+    topic:       classifications[i].category,
+    subcategory: classifications[i].subcategory,
+  }));
 }
 
 /** FeedConfig をもとにフィードを取得する（Google News 媒体名抽出対応） */
@@ -113,7 +119,7 @@ async function fetchFeedByConfig(config: FeedConfig): Promise<RssFeedItem[]> {
   const feed = await parser.parseURL(config.url);
   const isGoogleNews = config.type === "google-news";
 
-  const items = (feed.items ?? []).map((item): RssFeedItem => {
+  const rawItems = (feed.items ?? []).map((item) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const raw = item as any;
     const imageUrl: string | undefined =
@@ -140,12 +146,15 @@ async function fetchFeedByConfig(config: FeedConfig): Promise<RssFeedItem[]> {
       publishedAt: item.pubDate ?? item.isoDate ?? undefined,
       source: sourceName,
       imageUrl,
-      topic: classifyTopic(title, summary),
     };
   });
 
-  if (!config.filterPolitical) return items.slice(0, 15);
-  return items.filter((item) => isPolitical(item.title, item.summary)).slice(0, 10);
+  const filtered = !config.filterPolitical
+    ? rawItems.slice(0, 15)
+    : rawItems.filter((item) => isPolitical(item.title, item.summary)).slice(0, 10);
+
+  // 分類はfetchAllDefaultFeeds側でまとめて実施するため、ここではtopic未設定で返す
+  return filtered as RssFeedItem[];
 }
 
 /**
@@ -178,11 +187,23 @@ export async function fetchAllDefaultFeeds(
     return true;
   });
 
-  return deduped.sort((a, b) => {
+  const sorted = deduped.sort((a, b) => {
     const da = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
     const db = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
     return db - da;
   });
+
+  // 未分類の記事を一括でLLM分類（fetchFeedByConfig では topic を付けていない）
+  const unclassified = sorted.filter((item) => !item.topic);
+  if (unclassified.length > 0) {
+    const classifications = await classifyArticlesBatchLLM(unclassified);
+    unclassified.forEach((item, i) => {
+      item.topic       = classifications[i].category;
+      item.subcategory = classifications[i].subcategory;
+    });
+  }
+
+  return sorted;
 }
 
 // 後方互換エクスポート（compare/route.ts 等が参照）

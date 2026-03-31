@@ -12,15 +12,16 @@ describe("classifyTopic", () => {
     expect(classifyTopic("オリンピック代表選考レース")).toBe("sports");
   });
 
-  it("外交キーワードで diplomacy を返す", () => {
-    expect(classifyTopic("日米首脳会談、防衛費増額で合意")).toBe("diplomacy");
-    expect(classifyTopic("北朝鮮がミサイル発射、日本海に落下")).toBe("diplomacy");
-    expect(classifyTopic("ロシアによるウクライナ侵攻が継続")).toBe("diplomacy");
+  it("健康キーワードで health を返す", () => {
+    expect(classifyTopic("新型コロナ感染者が急増、厚生労働省が対策を発表")).toBe("health");
+    expect(classifyTopic("新薬が臨床試験で有効性を確認")).toBe("health");
   });
 
-  it("政治キーワードで politics を返す", () => {
+  it("政治・外交キーワードで politics を返す", () => {
     expect(classifyTopic("国会で法案が可決、首相が署名")).toBe("politics");
     expect(classifyTopic("自民党、選挙公約を発表")).toBe("politics");
+    expect(classifyTopic("日米首脳会談、防衛費増額で合意")).toBe("politics");
+    expect(classifyTopic("北朝鮮がミサイル発射、日本海に落下")).toBe("politics");
   });
 
   it("経済キーワードで economy を返す", () => {
@@ -29,14 +30,19 @@ describe("classifyTopic", () => {
     expect(classifyTopic("賃上げ率が過去最高水準に")).toBe("economy");
   });
 
-  it("テックキーワードで tech を返す", () => {
-    expect(classifyTopic("生成AIの規制を巡る議論が加速")).toBe("tech");
-    expect(classifyTopic("国産半導体工場が稼働開始")).toBe("tech");
+  it("ビジネスキーワードで business を返す", () => {
+    expect(classifyTopic("トヨタが第2四半期決算を発表、増収増益")).toBe("business");
+    expect(classifyTopic("スタートアップがIPOを申請")).toBe("business");
   });
 
-  it("社会キーワードで society を返す", () => {
-    expect(classifyTopic("少子化対策の強化を検討")).toBe("society");
-    expect(classifyTopic("殺人事件で容疑者を逮捕")).toBe("society");
+  it("科学技術キーワードで science_tech を返す", () => {
+    expect(classifyTopic("生成AIの規制を巡る議論が加速")).toBe("science_tech");
+    expect(classifyTopic("国産半導体工場が稼働開始")).toBe("science_tech");
+  });
+
+  it("文化ライフスタイルキーワードで culture_lifestyle を返す", () => {
+    expect(classifyTopic("新しいアニメ映画が興行収入1位")).toBe("culture_lifestyle");
+    expect(classifyTopic("殺人事件で容疑者を逮捕")).toBe("culture_lifestyle");
   });
 
   it("キーワード未一致で other を返す", () => {
@@ -45,21 +51,24 @@ describe("classifyTopic", () => {
   });
 
   it("要約テキストも分類に使用される", () => {
-    // タイトルにキーワードなし、要約にあり
     expect(classifyTopic("速報", "日銀が緊急利上げを決定")).toBe("economy");
   });
 
-  it("優先順位: 災害 > スポーツ > 外交 > 政治 > 経済", () => {
-    // 地震（disaster）+ 経済（economy）→ disaster が勝つ
+  it("優先順位: 災害 > スポーツ > 健康 > 政治 > 経済", () => {
     expect(classifyTopic("地震被害で株価急落、経済への影響懸念")).toBe("disaster");
   });
 });
 
 describe("getTopicDef", () => {
-  it("既知トピックのラベルとアイコンを返す", () => {
+  it("既知カテゴリのラベルとアイコンを返す", () => {
     const def = getTopicDef("economy");
     expect(def.label).toBe("経済");
-    expect(def.icon).toBe("💰");
+    expect(def.icon).toBe("📈");
+  });
+
+  it("science_tech のラベルを返す", () => {
+    const def = getTopicDef("science_tech");
+    expect(def.label).toBe("科学・技術");
   });
 
   it("other の場合は「その他」を返す", () => {
@@ -70,13 +79,14 @@ describe("getTopicDef", () => {
 });
 
 describe("TOPIC_ORDER", () => {
-  it("すべてのトピックが TOPICS に定義されている", () => {
+  it("8カテゴリすべてが定義されている", () => {
+    expect(TOPIC_ORDER).toHaveLength(8);
     for (const id of TOPIC_ORDER) {
       expect(TOPICS[id]).toBeDefined();
     }
   });
 
-  it("各トピックのキーワードは1件以上ある", () => {
+  it("各カテゴリのキーワードは1件以上ある", () => {
     for (const id of TOPIC_ORDER) {
       expect(TOPICS[id].keywords.length).toBeGreaterThan(0);
     }

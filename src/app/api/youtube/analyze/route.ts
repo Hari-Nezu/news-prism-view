@@ -2,7 +2,7 @@ import { analyzeArticle } from "@/lib/ollama";
 import { fetchTranscript, extractVideoId } from "@/lib/youtube-feed";
 import { saveYouTubeVideo } from "@/lib/db";
 import { embedArticle } from "@/lib/embeddings";
-import { classifyTopic } from "@/lib/topic-classifier";
+import { classifyArticleLLM } from "@/lib/news-classifier-llm";
 import { ALL_YOUTUBE_CHANNELS } from "@/lib/youtube-channel-configs";
 import { z } from "zod";
 
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
 
           // 分析
           const analysis = await analyzeArticle(item.title, transcript);
-          const topic = classifyTopic(item.title, analysis.summary);
+          const { category: topic, subcategory } = await classifyArticleLLM(item.title, analysis.summary);
 
           // チャンネルID を config から取得
           const channelConfig = ALL_YOUTUBE_CHANNELS.find((c) => c.name === item.source);
@@ -109,6 +109,7 @@ export async function POST(request: Request) {
                     summary:       analysis.summary,
                     counterOpinion: analysis.counterOpinion,
                     topic,
+                    subcategory,
                   },
                   embedding ?? undefined
                 )

@@ -25,7 +25,7 @@ export interface FeedSettings {
 }
 
 // デフォルトで表示するトピック（カラムとして並べるもの）
-export const DEFAULT_VISIBLE_TOPICS = ["diplomacy", "politics", "economy"];
+export const DEFAULT_VISIBLE_TOPICS = ["politics", "economy", "science_tech"];
 
 const STORAGE_KEY = "newsprism:feed-settings";
 

@@ -28,6 +28,7 @@ model Article {
   counterOpinion String
 
   topic          String?
+  subcategory    String?
 
   // 埋め込みベクトル（nomic-embed-text = 768次元）
   // Prisma未対応型のため INSERT/SELECT は生SQL で処理
@@ -124,6 +125,7 @@ model YouTubeVideo {
   counterOpinion String
 
   topic          String?
+  subcategory    String?
 
   embedding      Unsupported("vector(768)")?
 

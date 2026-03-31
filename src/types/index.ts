@@ -34,7 +34,8 @@ export interface RssFeedItem {
   publishedAt?: string;
   source: string;
   imageUrl?: string;
-  topic?: string;  // トピック分類ID（"politics" | "economy" | ... | "other"）
+  topic?: string;       // カテゴリID（"politics" | "economy" | ... | "other"）
+  subcategory?: string; // サブカテゴリID（"diplomacy" | "domestic_politics" | ...）
 }
 
 // ── メディア比較ページ用 ──────────────────────────────

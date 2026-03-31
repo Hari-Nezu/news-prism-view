@@ -2,7 +2,7 @@ import Parser from "rss-parser";
 import { YoutubeTranscript } from "youtube-transcript";
 import type { RssFeedItem } from "@/types";
 import { ALL_YOUTUBE_CHANNELS, DEFAULT_ENABLED_CHANNEL_IDS, type YouTubeChannelConfig } from "./youtube-channel-configs";
-import { classifyTopic } from "./topic-classifier";
+import { classifyArticlesBatchLLM } from "./news-classifier-llm";
 
 const parser = new Parser({
   timeout: 10000,
@@ -76,7 +76,6 @@ export async function fetchYouTubeChannelFeed(
       publishedAt: item.pubDate ?? item.isoDate ?? undefined,
       source:      config.name,
       imageUrl:    thumbnailUrl,
-      topic:       classifyTopic(title, typeof summary === "string" ? summary : undefined),
     };
   });
 
@@ -99,9 +98,17 @@ export async function fetchAllYouTubeFeeds(
 
   // URL で重複除去
   const seen = new Set<string>();
-  return items.filter((item) => {
+  const deduped = items.filter((item) => {
     if (!item.url || seen.has(item.url)) return false;
     seen.add(item.url);
     return true;
   });
+
+  // 一括LLM分類
+  const classifications = await classifyArticlesBatchLLM(deduped);
+  return deduped.map((item, i) => ({
+    ...item,
+    topic:       classifications[i].category,
+    subcategory: classifications[i].subcategory,
+  }));
 }

@@ -32,7 +32,7 @@ export async function saveArticle(
   article: AnalyzedArticle,
   embedding?: number[]
 ): Promise<string> {
-  const { title, content, url, source, publishedAt, analysis, topic } = article;
+  const { title, content, url, source, publishedAt, analysis, topic, subcategory } = article;
 
   const saved = await getPrisma().article.create({
     data: {
@@ -42,6 +42,7 @@ export async function saveArticle(
       source: source ?? null,
       publishedAt: publishedAt ?? null,
       topic: topic ?? null,
+      subcategory: subcategory ?? null,
       economic:      analysis.scores.economic,
       social:        analysis.scores.social,
       diplomatic:    analysis.scores.diplomatic,
@@ -79,6 +80,7 @@ export async function getRecentArticles(limit = 30): Promise<AnalyzedArticle[]> 
       publishedAt: true,
       analyzedAt: true,
       topic: true,
+      subcategory: true,
       economic: true,
       social: true,
       diplomatic: true,
@@ -363,6 +365,7 @@ export interface YouTubeVideoSaveInput {
   summary:       string;
   counterOpinion: string;
   topic?:        string;
+  subcategory?:  string;
 }
 
 /** YouTube 動画分析結果を保存（既存なら更新） */
@@ -425,6 +428,7 @@ function rowToAnalyzedArticle(r: Record<string, unknown>): AnalyzedArticle {
     analyzedAt: r.analyzedAt instanceof Date
       ? r.analyzedAt.toISOString()
       : String(r.analyzedAt ?? new Date().toISOString()),
-    topic: r.topic ? String(r.topic) : undefined,
+    topic:       r.topic       ? String(r.topic)       : undefined,
+    subcategory: r.subcategory ? String(r.subcategory) : undefined,
   };
 }
