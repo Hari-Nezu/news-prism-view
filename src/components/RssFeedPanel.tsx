@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import type { RssFeedItem } from "@/types";
+import { useState, useEffect, useRef, useCallback } from "react";
+import type { RssFeedItem, NewsGroup, GroupMode } from "@/types";
 import { getSourceColors } from "@/lib/source-colors";
 import { getTopicDef, type TopicId } from "@/lib/topic-classifier";
 import FeedSettingsDrawer, {
@@ -9,6 +9,7 @@ import FeedSettingsDrawer, {
   saveFeedSettings,
   type FeedSettings,
 } from "./FeedSettingsDrawer";
+import RankingFeedView from "./RankingFeedView";
 
 interface Props {
   onAnalyze: (item: RssFeedItem) => void;
@@ -166,8 +167,39 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
     visibleTopics: [],
   });
 
+  // グループ表示モード
+  const [groupMode,     setGroupMode]     = useState<GroupMode>("off");
+  const groupModeRef = useRef<GroupMode>("off");
+  groupModeRef.current = groupMode; // レンダリングのたびに同期
+  const [groups,        setGroups]        = useState<NewsGroup[]>([]);
+  const [isGrouping,    setIsGrouping]    = useState(false);
+  const [groupError,    setGroupError]    = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
+
   useEffect(() => {
     setSettings(loadFeedSettings());
+  }, []);
+
+  const groupItems = useCallback(async (targetItems: RssFeedItem[]) => {
+    setIsGrouping(true);
+    setGroupError("");
+    setGroups([]);
+    setExpandedGroups(new Set());
+    try {
+      const res = await fetch("/api/rss/group", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: targetItems }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "グループ化に失敗しました");
+      setGroups(data.groups ?? []);
+      setExpandedGroups(new Set([0]));
+    } catch (e) {
+      setGroupError(e instanceof Error ? e.message : "グループ化に失敗しました");
+    } finally {
+      setIsGrouping(false);
+    }
   }, []);
 
   const loadFeeds = useCallback(async (currentSettings: FeedSettings) => {
@@ -211,12 +243,15 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
         return db - da;
       });
       setItems(deduped);
+      if (groupModeRef.current === "ranking") {
+        groupItems(deduped);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "RSSの取得に失敗しました");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [groupItems]);
 
   useEffect(() => {
     if (settings.enabledIds.length > 0 || settings.customFeeds.length > 0) {
@@ -227,6 +262,22 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
   function handleSettingsChange(next: FeedSettings) {
     setSettings(next);
     saveFeedSettings(next);
+  }
+
+  function handleGroupToggle() {
+    const next: GroupMode = groupMode === "off" ? "ranking" : "off";
+    setGroupMode(next);
+    if (next === "ranking" && groups.length === 0 && items.length > 0) {
+      groupItems(items);
+    }
+  }
+
+  function toggleGroupExpand(index: number) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      next.has(index) ? next.delete(index) : next.add(index);
+      return next;
+    });
   }
 
   // ソースフィルタ適用済みアイテム
@@ -269,6 +320,22 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
               媒体比較
             </button>
           )}
+          <button
+            onClick={handleGroupToggle}
+            disabled={isGrouping || items.length === 0}
+            title="同一ニュースイベントごとにグループ化"
+            className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
+              groupMode !== "off"
+                ? "bg-amber-50 border-amber-300 text-amber-700"
+                : "border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {isGrouping
+              ? <div className="w-3.5 h-3.5 border-2 border-amber-300 border-t-amber-600 rounded-full animate-spin" />
+              : <span className="text-xs">🏆</span>
+            }
+            {isGrouping ? "AIで分析中..." : groupMode === "ranking" ? "ランキング表示中" : "まとめ表示"}
+          </button>
           <button
             onClick={() => loadFeeds(settings)}
             disabled={isLoading}
@@ -326,9 +393,33 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
         </div>
       )}
 
-      {/* ── マルチカラムビュー ── */}
-      {isColumnView ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
+      {/* ── ランキング表示モード ── */}
+      {groupMode === "ranking" ? (
+        <div>
+          {groupError && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 mb-3">
+              <p className="text-sm text-red-600">{groupError}</p>
+            </div>
+          )}
+          {isGrouping ? (
+            <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+              <div className="w-8 h-8 border-2 border-gray-200 border-t-amber-500 rounded-full animate-spin mb-4" />
+              <p className="text-sm">AIでグループ化しています...</p>
+            </div>
+          ) : (
+            <RankingFeedView
+              groups={groups}
+              totalSourceCount={sources.length}
+              analyzedUrls={analyzedUrls}
+              analyzingUrl={analyzingUrl}
+              onAnalyze={onAnalyze}
+              onCompareArticle={onCompareArticle}
+            />
+          )}
+        </div>
+      ) : /* ── マルチカラムビュー ── */
+      isColumnView ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 items-start">
           {columns.map(({ topicId, def, items: colItems }) => (
             <div key={topicId} className="flex flex-col min-w-0">
               {/* カラムヘッダー */}
@@ -369,7 +460,7 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
         </div>
       ) : (
         /* ── 統合ビュー（visibleTopics が空のとき） ── */
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
           {unifiedItems.map((item, i) => (
             <ArticleCard
               key={`${item.url}-${i}`}

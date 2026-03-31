@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   title: "NewsPrism — 3軸ポジショニング・インテリジェンス",
   description:
     "ニュース記事を経済・社会・外交安保の3軸でスコアリングし、思考のエコーチェンバーから脱却するための自律型ニュース解析ツール",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
