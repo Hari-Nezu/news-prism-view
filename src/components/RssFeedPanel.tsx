@@ -159,7 +159,7 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
   const [items,        setItems]        = useState<RssFeedItem[]>([]);
   const [isLoading,    setIsLoading]    = useState(false);
   const [error,        setError]        = useState("");
-  const [activeSource, setActiveSource] = useState<string | null>(null);
+
   const [showSettings, setShowSettings] = useState(false);
   const [settings,     setSettings]     = useState<FeedSettings>({
     enabledIds:    [],
@@ -280,23 +280,16 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
     });
   }
 
-  // ソースフィルタ適用済みアイテム
-  const sourceFiltered = activeSource
-    ? items.filter((item) => item.source === activeSource)
-    : items;
-
-  const sources = [...new Set(items.map((item) => item.source))];
-
   // カラム定義（visibleTopics が空なら統合ビュー）
   const visibleTopics = settings.visibleTopics;
   const columns = visibleTopics.filter((id) => id !== "other").map((topicId) => ({
     topicId: topicId as TopicId,
     def: getTopicDef(topicId as TopicId),
-    items: sourceFiltered.filter((item) => (item.topic ?? "other") === topicId),
+    items: items.filter((item) => (item.topic ?? "other") === topicId),
   }));
 
   const isColumnView = columns.length > 0;
-  const unifiedItems = sourceFiltered; // カラムなしのとき全表示
+  const unifiedItems = items;
 
   return (
     <div className="w-full">
@@ -358,34 +351,6 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
         </div>
       </div>
 
-      {/* ソースフィルター */}
-      {sources.length > 1 && (
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          <button
-            onClick={() => setActiveSource(null)}
-            className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              activeSource === null ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            すべて
-          </button>
-          {sources.map((source) => {
-            const c = getSourceColors(source);
-            const isActive = activeSource === source;
-            return (
-              <button
-                key={source}
-                onClick={() => setActiveSource(isActive ? null : source)}
-                className="flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors"
-                style={isActive ? { backgroundColor: "#111827", color: "#fff" } : { backgroundColor: c.bgColor, color: c.textColor }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: isActive ? "#fff" : c.dotColor }} />
-                {source}
-              </button>
-            );
-          })}
-        </div>
-      )}
 
       {error && (
         <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 mb-4">
@@ -409,7 +374,6 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
           ) : (
             <RankingFeedView
               groups={groups}
-              totalSourceCount={sources.length}
               analyzedUrls={analyzedUrls}
               analyzingUrl={analyzingUrl}
               onAnalyze={onAnalyze}
@@ -419,7 +383,12 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
         </div>
       ) : /* ── マルチカラムビュー ── */
       isColumnView ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 items-start">
+        <div className={`grid gap-4 items-start ${
+          columns.length === 1 ? "grid-cols-1" :
+          columns.length === 2 ? "grid-cols-1 md:grid-cols-2" :
+          columns.length === 3 ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" :
+          "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        }`}>
           {columns.map(({ topicId, def, items: colItems }) => (
             <div key={topicId} className="flex flex-col min-w-0">
               {/* カラムヘッダー */}
@@ -460,7 +429,12 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
         </div>
       ) : (
         /* ── 統合ビュー（visibleTopics が空のとき） ── */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+        <div className={`grid gap-4 ${
+          unifiedItems.length === 1 ? "grid-cols-1" :
+          unifiedItems.length === 2 ? "grid-cols-1 sm:grid-cols-2" :
+          unifiedItems.length === 3 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" :
+          "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+        }`}>
           {unifiedItems.map((item, i) => (
             <ArticleCard
               key={`${item.url}-${i}`}

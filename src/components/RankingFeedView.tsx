@@ -7,7 +7,6 @@ import RankingCompactItem from "./RankingCompactItem";
 
 interface Props {
   groups: NewsGroup[];
-  totalSourceCount: number;
   analyzedUrls: string[];
   analyzingUrl?: string;
   onAnalyze: (item: RssFeedItem) => void;
@@ -15,7 +14,7 @@ interface Props {
 }
 
 export default function RankingFeedView({
-  groups, totalSourceCount: _totalSourceCount, analyzedUrls, analyzingUrl, onAnalyze, onCompareArticle,
+  groups, analyzedUrls, analyzingUrl, onAnalyze, onCompareArticle,
 }: Props) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 

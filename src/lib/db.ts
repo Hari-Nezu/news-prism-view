@@ -6,7 +6,7 @@ import { DATABASE_URL } from "@/lib/config";
 // PrismaClient レイジーシングルトン
 // スキーマ変更後に prisma generate を実行した場合、dev サーバーの再起動が必要。
 // （globalThis はHMR をまたいで保持されるため、古いインスタンスがキャッシュされ続ける）
-const PRISMA_CACHE_KEY = "prisma_v5"; // スキーマ変更時にインクリメントする
+const PRISMA_CACHE_KEY = "prisma_v6"; // スキーマ変更時にインクリメントする
 const globalForPrisma = globalThis as unknown as Record<string, PrismaClient | undefined>;
 
 function getPrisma(): PrismaClient {
@@ -338,6 +338,71 @@ export async function upsertFeedGroupItems(
 export async function deleteStaleFeedGroups(): Promise<void> {
   await getPrisma().$executeRawUnsafe(
     `DELETE FROM "FeedGroup" WHERE "lastSeenAt" < NOW() - INTERVAL '30 days'`
+  );
+}
+
+// ── RssArticle ────────────────────────────────────────────
+
+/** RSSから取得した記事を一括 upsert（URL重複はスキップ、topic/subcategoryのみ更新） */
+export async function upsertRssArticles(items: RssFeedItem[]): Promise<void> {
+  const valid = items.filter((item) => item.url);
+  if (valid.length === 0) return;
+
+  const CHUNK = 50;
+  const prisma = getPrisma();
+
+  for (let i = 0; i < valid.length; i += CHUNK) {
+    const chunk = valid.slice(i, i + CHUNK);
+    const params: unknown[] = [];
+    const rows = chunk.map((item) => {
+      const publishedAt = item.publishedAt ? new Date(item.publishedAt) : null;
+      const validDate = publishedAt && !isNaN(publishedAt.getTime()) ? publishedAt : null;
+      const offset = params.length;
+      params.push(
+        item.url, item.title, item.source,
+        item.summary ?? null, item.imageUrl ?? null, validDate,
+        item.topic ?? null, item.subcategory ?? null,
+      );
+      return `(gen_random_uuid()::text, $${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, NOW())`;
+    });
+
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "RssArticle" (id, url, title, source, summary, "imageUrl", "publishedAt", topic, subcategory, "fetchedAt")
+       VALUES ${rows.join(", ")}
+       ON CONFLICT (url) DO UPDATE SET
+         topic       = COALESCE(EXCLUDED.topic, "RssArticle".topic),
+         subcategory = COALESCE(EXCLUDED.subcategory, "RssArticle".subcategory),
+         "fetchedAt" = NOW()`,
+      ...params,
+    );
+  }
+}
+
+/** 指定日時以降に fetchedAt された記事を取得 */
+export async function getRssArticlesSince(since: Date): Promise<RssFeedItem[]> {
+  const rows = await getPrisma().$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT url, title, source, summary, "imageUrl", "publishedAt", topic, subcategory
+     FROM "RssArticle"
+     WHERE "fetchedAt" >= $1
+     ORDER BY "publishedAt" DESC NULLS LAST`,
+    since,
+  );
+  return rows.map((r) => ({
+    url:         String(r.url),
+    title:       String(r.title),
+    source:      String(r.source),
+    summary:     r.summary != null ? String(r.summary) : undefined,
+    imageUrl:    r.imageUrl != null ? String(r.imageUrl) : undefined,
+    publishedAt: r.publishedAt instanceof Date ? r.publishedAt.toISOString() : r.publishedAt != null ? String(r.publishedAt) : undefined,
+    topic:       r.topic != null ? String(r.topic) : undefined,
+    subcategory: r.subcategory != null ? String(r.subcategory) : undefined,
+  }));
+}
+
+/** 3ヶ月以上前の記事を削除 */
+export async function deleteStaleRssArticles(): Promise<void> {
+  await getPrisma().$executeRawUnsafe(
+    `DELETE FROM "RssArticle" WHERE "fetchedAt" < NOW() - INTERVAL '3 months'`
   );
 }
 

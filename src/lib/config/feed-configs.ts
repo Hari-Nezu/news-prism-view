@@ -25,7 +25,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "政治",
     filterPolitical: false,
-    defaultEnabled: true,
+    defaultEnabled: false,
   },
   {
     id: "nhk-international",
@@ -34,7 +34,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "国際",
     filterPolitical: false,
-    defaultEnabled: true,
+    defaultEnabled: false,
   },
   {
     id: "nhk-economy",
@@ -43,7 +43,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "経済",
     filterPolitical: false,
-    defaultEnabled: true,
+    defaultEnabled: false,
   },
   {
     id: "nhk-society",
@@ -62,7 +62,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "総合",
     filterPolitical: true,
-    defaultEnabled: true,
+    defaultEnabled: false,
   },
   {
     id: "sankei",
@@ -71,7 +71,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "総合",
     filterPolitical: true,
-    defaultEnabled: true,
+    defaultEnabled: false,
   },
   {
     id: "toyokeizai",
@@ -80,7 +80,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "経済",
     filterPolitical: true,
-    defaultEnabled: true,
+    defaultEnabled: false,
   },
   {
     id: "huffpost-jp",
@@ -89,7 +89,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "総合",
     filterPolitical: true,
-    defaultEnabled: true,
+    defaultEnabled: false,
   },
   // ── Google News 検索フィード ────────────────────────────────
   {

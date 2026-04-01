@@ -12,8 +12,8 @@ export const TOPICS: Record<string, TopicDef> = {
     icon: "⚠️",
     keywords: [
       "地震", "台風", "津波", "洪水", "大雨", "豪雨", "避難", "被災",
-      "震度", "マグニチュード", "火山", "噴火", "土砂崩れ", "停電",
-      "熱中症", "大雪", "暴風", "警報", "注意報",
+      "震度", "マグニチュード", "火山", "噴火", "土砂崩れ",
+      "大雪", "暴風", "災害警報", "特別警報", "緊急地震速報",
     ],
   },
   sports: {
@@ -90,14 +90,15 @@ export const TOPICS: Record<string, TopicDef> = {
 };
 
 // 優先度順（先にマッチしたものが採用される）
+// disaster は自然災害に限定するため politics/economy より後ろ
 export const TOPIC_ORDER: string[] = [
-  "disaster",
   "sports",
-  "health",
   "politics",
   "economy",
   "business",
+  "health",
   "science_tech",
+  "disaster",
   "culture_lifestyle",
 ];
 

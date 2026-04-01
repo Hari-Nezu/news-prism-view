@@ -46,6 +46,7 @@ export interface NewsGroup {
   groupTitle: string;        // Ollamaが命名した見出し（例: "防衛費増額の閣議決定"）
   items: RssFeedItem[];      // 同一ニュースと判定された記事群
   singleOutlet: boolean;     // true = 1媒体のみ報道（比較不可）
+  topic?: string;            // 支配的トピック（TopicId | "other"）
 }
 
 /** ニュースフィードのグループ表示モード */

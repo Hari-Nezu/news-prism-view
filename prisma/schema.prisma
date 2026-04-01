@@ -38,6 +38,23 @@ model Article {
   @@index([analyzedAt(sort: Desc)])
 }
 
+/// RSSフィードから取得した生記事（永続化・重複排除用）
+model RssArticle {
+  id          String    @id @default(cuid())
+  url         String    @unique
+  title       String
+  source      String
+  summary     String?
+  imageUrl    String?
+  publishedAt DateTime?
+  topic       String?
+  subcategory String?
+  fetchedAt   DateTime  @default(now())
+
+  @@index([fetchedAt(sort: Desc)])
+  @@index([publishedAt(sort: Desc)])
+}
+
 /// RSSフィードのニュースイベントグループ（インクリメンタルグループ化用）
 model FeedGroup {
   id           String          @id @default(cuid())

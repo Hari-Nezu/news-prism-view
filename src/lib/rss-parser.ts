@@ -2,6 +2,7 @@ import Parser from "rss-parser";
 import type { RssFeedItem } from "@/types";
 import { ALL_FEED_SOURCES, DEFAULT_ENABLED_IDS, type FeedConfig } from "./config/feed-configs";
 import { fetchNewsdataArticles } from "./newsdata-client";
+import { upsertRssArticles } from "./db";
 import { classifyArticlesBatchLLM } from "./news-classifier-llm";
 import { validatePublicUrl } from "./article-fetcher";
 
@@ -202,6 +203,10 @@ export async function fetchAllDefaultFeeds(
       item.subcategory = classifications[i].subcategory;
     });
   }
+
+  void upsertRssArticles(sorted).catch((e) =>
+    console.error("[rss-parser] DB保存エラー:", e)
+  );
 
   return sorted;
 }

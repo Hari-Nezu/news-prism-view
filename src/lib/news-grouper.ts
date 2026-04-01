@@ -108,6 +108,7 @@ export async function groupArticlesByEvent(
     groupTitle:   titles[i],
     items:        cluster.items,
     singleOutlet: new Set(cluster.items.map((item) => item.source)).size <= 1,
+    topic:        dominantTopic(cluster.items),
   }));
 
   groups.sort((a, b) => {
@@ -120,7 +121,7 @@ export async function groupArticlesByEvent(
 
 // ── インクリメンタルグループ化 ──────────────────────────
 
-const TIME_WINDOW_MS  = 7  * 24 * 60 * 60 * 1000;
+const TIME_WINDOW_MS  = 3  * 24 * 60 * 60 * 1000;
 const MAX_GROUP_SIZE  = 20;
 
 /**
@@ -207,6 +208,7 @@ export async function incrementalGroupArticles(
       groupTitle:   group.title,
       items:        assigned,
       singleOutlet: new Set(assigned.map((i) => i.source)).size <= 1,
+      topic:        dominantTopic(assigned),
     });
   }
 
@@ -230,6 +232,21 @@ export async function incrementalGroupArticles(
   }
 
   return [...matchedGroups, ...newGroups];
+}
+
+// ── トピックヘルパー ─────────────────────────────────────
+
+function dominantTopic(items: RssFeedItem[]): string {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const t = item.topic ?? "other";
+    counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  let best = "other", bestN = 0;
+  for (const [t, n] of counts) {
+    if (n > bestN) { bestN = n; best = t; }
+  }
+  return best;
 }
 
 // ── ベクトル演算ヘルパー ─────────────────────────────────

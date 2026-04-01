@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
-import { embedArticle, embedNewsGroup } from "@/lib/embeddings";
+import { embed, embedBatch, embedArticle, embedNewsGroup } from "@/lib/embeddings";
 
 const MOCK_VEC = [0.1, 0.2, 0.3];
 
@@ -42,6 +42,72 @@ describe("embedArticle", () => {
   it("fetch が例外を投げた場合 null を返す", async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("timeout"));
     expect(await embedArticle("タイトル", "要約")).toBeNull();
+  });
+});
+
+// ── embedBatch ──────────────────────────────────────────
+
+describe("embedBatch", () => {
+  it("空の配列を渡すと空の配列を返す", async () => {
+    expect(await embedBatch([])).toEqual([]);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("fetch を1回だけ呼び、input が配列形式になる", async () => {
+    const texts = ["text1", "text2"];
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ embeddings: [MOCK_VEC, MOCK_VEC] }),
+    });
+
+    const results = await embedBatch(texts);
+    expect(global.fetch).toHaveBeenCalledOnce();
+    const body = JSON.parse(
+      (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body
+    );
+    expect(body.input).toEqual(["text1", "text2"]);
+    expect(results).toHaveLength(2);
+    expect(results[0]).toEqual(MOCK_VEC);
+    expect(results[1]).toEqual(MOCK_VEC);
+  });
+
+  it("Ollama のレスポンスが短い場合に null をパディングする", async () => {
+    const texts = ["text1", "text2"];
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ embeddings: [MOCK_VEC] }), // 1件足りない
+    });
+
+    const results = await embedBatch(texts);
+    expect(results).toHaveLength(2);
+    expect(results[0]).toEqual(MOCK_VEC);
+    expect(results[1]).toBeNull();
+  });
+
+  it("fetch が ok:false の場合、入力と同じ長さの null 配列を返す", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false });
+    const results = await embedBatch(["a", "b"]);
+    expect(results).toEqual([null, null]);
+  });
+
+  it("fetch が例外を投げた場合、入力と同じ長さの null 配列を返す", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("timeout"));
+    const results = await embedBatch(["a", "b"]);
+    expect(results).toEqual([null, null]);
+  });
+});
+
+// ── embed ───────────────────────────────────────────────
+
+describe("embed", () => {
+  it("単一のテキストをベクトル化する", async () => {
+    const result = await embed("hello world");
+    expect(global.fetch).toHaveBeenCalledOnce();
+    const body = JSON.parse(
+      (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body
+    );
+    expect(body.input).toBe("hello world");
+    expect(result).toEqual(MOCK_VEC);
   });
 });
 
