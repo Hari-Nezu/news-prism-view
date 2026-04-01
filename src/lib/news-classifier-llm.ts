@@ -9,8 +9,7 @@ import { z } from "zod";
 import { classifyTopic, type TopicId } from "./topic-classifier";
 import { buildClassificationGuide, CATEGORIES } from "./news-taxonomy-configs";
 
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
-const OLLAMA_MODEL    = process.env.OLLAMA_MODEL    ?? "llama3.2";
+import { OLLAMA_BASE_URL, CLASSIFY_MODEL } from "@/lib/config";
 
 export interface ClassificationResult {
   category:    TopicId;
@@ -78,7 +77,7 @@ export async function classifyArticleLLM(
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model:   OLLAMA_MODEL,
+        model:   CLASSIFY_MODEL,
         system:  SYSTEM_PROMPT,
         prompt:  `以下の記事を分類してください。\n\n${content}`,
         stream:  false,
@@ -118,7 +117,7 @@ export async function classifyArticlesBatchLLM(
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model:   OLLAMA_MODEL,
+        model:   CLASSIFY_MODEL,
         system:  SYSTEM_PROMPT,
         prompt:  `以下の${items.length}件の記事を分類してください。\n\n${articleList}`,
         stream:  false,

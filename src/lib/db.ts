@@ -1,6 +1,7 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import type { AnalyzedArticle, NewsGroup, RssFeedItem } from "@/types";
+import { DATABASE_URL } from "@/lib/config";
 
 // PrismaClient レイジーシングルトン
 // スキーマ変更後に prisma generate を実行した場合、dev サーバーの再起動が必要。
@@ -11,11 +12,7 @@ const globalForPrisma = globalThis as unknown as Record<string, PrismaClient | u
 function getPrisma(): PrismaClient {
   if (globalForPrisma[PRISMA_CACHE_KEY]) return globalForPrisma[PRISMA_CACHE_KEY]!;
 
-  const adapter = new PrismaPg({
-    connectionString:
-      process.env.DATABASE_URL ??
-      "postgresql://newsprism:newsprism@localhost:5432/newsprism",
-  });
+  const adapter = new PrismaPg({ connectionString: DATABASE_URL });
   const client = new PrismaClient({ adapter });
 
   if (process.env.NODE_ENV !== "production") globalForPrisma[PRISMA_CACHE_KEY] = client;

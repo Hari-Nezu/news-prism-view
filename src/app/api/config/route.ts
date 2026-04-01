@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { OLLAMA_MODEL, CLASSIFY_MODEL, EMBED_MODEL } from "@/lib/config";
 
 export async function GET() {
   return NextResponse.json({
-    model:      process.env.OLLAMA_MODEL      ?? "llama3.2",
-    embedModel: process.env.EMBED_MODEL       ?? "nomic-embed-text",
+    model:         OLLAMA_MODEL,
+    classifyModel: CLASSIFY_MODEL,
+    embedModel:    EMBED_MODEL,
   });
 }

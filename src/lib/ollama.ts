@@ -1,8 +1,6 @@
 import { z } from "zod";
 import type { AnalysisResult } from "@/types";
-
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "llama3.2";
+import { OLLAMA_BASE_URL, OLLAMA_MODEL, MULTI_MODELS as DEFAULT_MULTI_MODELS } from "@/lib/config";
 
 const AnalysisSchema = z.object({
   economic: z.number().min(-1).max(1),
@@ -54,7 +52,7 @@ const SYSTEM_PROMPT = `あなたは政治・社会・外交のポジショニン
 
 bias_warningは emotional_tone が 0.6 以上または -0.6 以下の場合に true にしてください。`;
 
-export const MULTI_MODELS = (process.env.MULTI_MODELS ?? "gemma3:12b,qwen3.5:4b,llama3.2").split(",").map(s => s.trim());
+export const MULTI_MODELS = DEFAULT_MULTI_MODELS;
 
 /** モデルの表示ラベル・色 */
 export const MODEL_META: Record<string, { label: string; color: string }> = {

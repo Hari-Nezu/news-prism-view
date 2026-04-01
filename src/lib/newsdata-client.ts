@@ -1,4 +1,5 @@
 import type { RssFeedItem } from "@/types";
+import { NEWSDATA_API_KEY } from "@/lib/config";
 
 interface NewsdataArticle {
   title: string;
@@ -19,8 +20,8 @@ interface NewsdataResponse {
  * NEWSDATA_API_KEY が未設定の場合は空配列を返す。
  */
 export async function fetchNewsdataArticles(): Promise<RssFeedItem[]> {
-  const apiKey = process.env.NEWSDATA_API_KEY;
-  if (!apiKey) return [];
+  if (!NEWSDATA_API_KEY) return [];
+  const apiKey = NEWSDATA_API_KEY;
 
   try {
     const params = new URLSearchParams({
