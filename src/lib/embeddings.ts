@@ -1,5 +1,4 @@
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
-const EMBED_MODEL = process.env.EMBED_MODEL ?? "nomic-embed-text";
+import { OLLAMA_BASE_URL, EMBED_MODEL } from "@/lib/config";
 
 /**
  * Ollama の埋め込みAPIでテキストをベクトル化する

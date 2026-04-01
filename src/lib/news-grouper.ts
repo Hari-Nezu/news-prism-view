@@ -10,8 +10,7 @@ import {
   type FeedGroupRecord,
 } from "@/lib/db";
 
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "llama3.2";
+import { OLLAMA_BASE_URL, OLLAMA_MODEL } from "@/lib/config";
 
 const GroupSchema = z.object({
   groups: z.array(
