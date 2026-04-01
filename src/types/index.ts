@@ -25,6 +25,7 @@ export interface AnalyzedArticle extends Article {
   analysis: AnalysisResult;
   analyzedAt: string;
   topic?: string;
+  subcategory?: string;
 }
 
 export interface RssFeedItem {
