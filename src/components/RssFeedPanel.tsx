@@ -289,7 +289,7 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
 
   // カラム定義（visibleTopics が空なら統合ビュー）
   const visibleTopics = settings.visibleTopics;
-  const columns = visibleTopics.map((topicId) => ({
+  const columns = visibleTopics.filter((id) => id !== "other").map((topicId) => ({
     topicId: topicId as TopicId,
     def: getTopicDef(topicId as TopicId),
     items: sourceFiltered.filter((item) => (item.topic ?? "other") === topicId),

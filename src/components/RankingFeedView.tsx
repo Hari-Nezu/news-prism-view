@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type { NewsGroup, RssFeedItem } from "@/types";
-import RankingHeroCard from "./RankingHeroCard";
 import RankingMediumCard from "./RankingMediumCard";
 import RankingCompactItem from "./RankingCompactItem";
 
@@ -16,9 +15,9 @@ interface Props {
 }
 
 export default function RankingFeedView({
-  groups, totalSourceCount, analyzedUrls, analyzingUrl, onAnalyze, onCompareArticle,
+  groups, totalSourceCount: _totalSourceCount, analyzedUrls, analyzingUrl, onAnalyze, onCompareArticle,
 }: Props) {
-  const [expanded, setExpanded] = useState<Set<number>>(new Set([0]));
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   function toggle(i: number) {
     setExpanded((prev) => {
@@ -40,10 +39,6 @@ export default function RankingFeedView({
   const multiOutlet  = sorted.filter((g) => !g.singleOutlet);
   const singleOutlet = sorted.filter((g) =>  g.singleOutlet);
 
-  const hero    = multiOutlet[0];
-  const mediums = multiOutlet.slice(1, 3);
-  const compact = multiOutlet.slice(3);
-
   const cardProps = (globalIndex: number) => ({
     isExpanded: expanded.has(globalIndex),
     onToggleExpand: () => toggle(globalIndex),
@@ -56,40 +51,15 @@ export default function RankingFeedView({
 
   return (
     <div className="space-y-3">
-      {/* #1 Hero */}
-      {hero && (
-        <RankingHeroCard
-          group={hero}
-          totalSourceCount={totalSourceCount}
-          {...cardProps(0)}
-        />
-      )}
-
-      {/* #2, #3 Medium — 2カラムgrid */}
-      {mediums.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {mediums.map((g, mi) => (
-            <RankingMediumCard
-              key={mi}
-              group={g}
-              rank={mi + 2}
-              {...cardProps(mi + 1)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* #4以降 Compact */}
-      {compact.map((g, ci) => (
-        <RankingCompactItem
-          key={ci}
+      {multiOutlet.map((g, i) => (
+        <RankingMediumCard
+          key={i}
           group={g}
-          rank={ci + 4}
-          {...cardProps(ci + 3)}
+          rank={i + 1}
+          {...cardProps(i)}
         />
       ))}
 
-      {/* 単独報道セクション */}
       {singleOutlet.length > 0 && (
         <>
           <div className="flex items-center gap-2 py-1">

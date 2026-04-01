@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { RssFeedItem, NewsGroup } from "@/types";
-import { embedBatch } from "@/lib/embeddings";
+import { embedBatch, cosineSimilarity } from "@/lib/embeddings";
 import {
   getActiveFeedGroups,
   createFeedGroup,
@@ -10,88 +10,106 @@ import {
   type FeedGroupRecord,
 } from "@/lib/db";
 
-import { OLLAMA_BASE_URL, OLLAMA_MODEL } from "@/lib/config";
+import { OLLAMA_BASE_URL, OLLAMA_MODEL, GROUP_CLUSTER_THRESHOLD, FEED_GROUP_SIMILARITY_THRESHOLD } from "@/lib/config";
 
-const GroupSchema = z.object({
+const NamingSchema = z.object({
   groups: z.array(
     z.object({
-      group_title: z.string(),
-      indices: z.array(z.number().int()),
+      index: z.number().int(),
+      title: z.string(),
     })
   ),
 });
 
-const SYSTEM_PROMPT = `あなたはニュース記事の分類専門家です。
-与えられた記事タイトルのリストを「同一ニュースイベント」ごとにグループ化してください。
+/**
+ * クラスタ群に日本語タイトルをつける（LLMの役割はここだけ）
+ * 失敗時は各クラスタの先頭タイトルをそのまま使う
+ */
+async function nameGroupClusters(clusters: RssFeedItem[][]): Promise<string[]> {
+  const clusterList = clusters
+    .map((items, i) => `グループ${i}: ${items.map((item) => `「${item.title}」`).join(" ")}`)
+    .join("\n");
 
-## ルール
-- 同じ出来事・政策・事件を報じている記事を同一グループにまとめる
-- 関連はあるが別の出来事（例: 同じ政策の異なる局面）は別グループにする
-- グループ名は20字以内の簡潔な日本語で命名する
-- 必ずJSON形式のみで回答する（説明文不要）
+  try {
+    const res = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        system: `各グループに20字以内の簡潔な日本語タイトルをつけてください。必ずJSON形式のみで回答してください。
+出力フォーマット: { "groups": [{ "index": 0, "title": "タイトル" }, ...] }`,
+        prompt: clusterList,
+        stream: false,
+        format: "json",
+        options: { temperature: 0.1 },
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
 
-## 出力フォーマット
-{
-  "groups": [
-    { "group_title": "グループ名", "indices": [0, 2, 4] },
-    { "group_title": "別のグループ名", "indices": [1, 3] }
-  ]
-}`;
+    if (!res.ok) throw new Error(`Ollama ${res.status}`);
+
+    const data     = await res.json();
+    const parsed   = NamingSchema.parse(JSON.parse(data.response));
+    const titleMap = new Map(parsed.groups.map((g) => [g.index, g.title]));
+    return clusters.map((items, i) => titleMap.get(i) ?? items[0].title.slice(0, 20));
+  } catch {
+    return clusters.map((items) => items[0].title.slice(0, 20));
+  }
+}
 
 /**
- * 複数記事をOllamaで同一ニュースごとにグループ化する
- * @returns グループ配列（複数媒体のグループが先頭に来るようソート済み）
+ * 複数記事を同一ニュースごとにグループ化する
+ * - Embedding コサイン類似度クラスタリングでグループを構成
+ * - LLM はグループ命名のみに使用（精度向上 + 高速化）
+ * - Embedding 失敗時はタイトル先頭をグループ名として返す
  */
 export async function groupArticlesByEvent(
   items: RssFeedItem[]
 ): Promise<NewsGroup[]> {
   if (items.length === 0) return [];
 
-  // 10件以下なら全件送信、多い場合は先頭30件に絞る
   const targets = items.slice(0, 30);
+  const vecs    = await embedBatch(targets.map((i) => i.title));
 
-  const articleList = targets
-    .map((item, i) => `${i}: 「${item.title}」- ${item.source}`)
-    .join("\n");
+  // Greedy クラスタリング: 類似度が閾値以上の最近傍クラスタに追加
+  type Cluster = { centroid: number[]; items: RssFeedItem[]; vecs: number[][] };
+  const clusters: Cluster[] = [];
 
-  const prompt = `以下の${targets.length}件の記事を同一ニュースごとにグループ化してください。\n\n${articleList}`;
+  for (let i = 0; i < targets.length; i++) {
+    const vec = vecs[i];
+    if (!vec) {
+      // embedding 失敗 → 単独クラスタとして追加（タイトルをそのまま使用）
+      clusters.push({ centroid: [], items: [targets[i]], vecs: [] });
+      continue;
+    }
 
-  const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      system: SYSTEM_PROMPT,
-      prompt,
-      stream: false,
-      format: "json",
-      options: { temperature: 0.1 },
-    }),
-  });
+    let bestCluster: Cluster | null = null;
+    let bestSim = GROUP_CLUSTER_THRESHOLD;
 
-  if (!response.ok) {
-    throw new Error(`グループ化APIエラー: ${response.status}`);
+    for (const cluster of clusters) {
+      if (cluster.centroid.length === 0) continue;
+      const sim = cosineSimilarity(vec, cluster.centroid);
+      if (sim > bestSim) { bestSim = sim; bestCluster = cluster; }
+    }
+
+    if (bestCluster) {
+      bestCluster.items.push(targets[i]);
+      bestCluster.vecs.push(vec);
+      bestCluster.centroid = meanVec(bestCluster.vecs);
+    } else {
+      clusters.push({ centroid: vec, items: [targets[i]], vecs: [vec] });
+    }
   }
 
-  const data = await response.json();
-  const raw = JSON.parse(data.response);
-  const parsed = GroupSchema.parse(raw);
+  // LLM でクラスタに命名
+  const titles = await nameGroupClusters(clusters.map((c) => c.items));
 
-  // インデックスから RssFeedItem に変換
-  const groups: NewsGroup[] = parsed.groups
-    .map(({ group_title, indices }) => {
-      const validIndices = indices.filter((i) => i >= 0 && i < targets.length);
-      const groupItems = validIndices.map((i) => targets[i]);
-      const uniqueSources = new Set(groupItems.map((item) => item.source));
-      return {
-        groupTitle: group_title,
-        items: groupItems,
-        singleOutlet: uniqueSources.size <= 1,
-      };
-    })
-    .filter((g) => g.items.length > 0);
+  const groups: NewsGroup[] = clusters.map((cluster, i) => ({
+    groupTitle:   titles[i],
+    items:        cluster.items,
+    singleOutlet: new Set(cluster.items.map((item) => item.source)).size <= 1,
+  }));
 
-  // 複数媒体のグループを先頭に表示
   groups.sort((a, b) => {
     if (a.singleOutlet !== b.singleOutlet) return a.singleOutlet ? 1 : -1;
     return b.items.length - a.items.length;
@@ -115,9 +133,7 @@ export async function incrementalGroupArticles(
 ): Promise<NewsGroup[]> {
   if (items.length === 0) return [];
 
-  const threshold = parseFloat(
-    process.env.FEED_GROUP_SIMILARITY_THRESHOLD ?? "0.68"
-  );
+  const threshold = FEED_GROUP_SIMILARITY_THRESHOLD;
 
   // 時間窓フィルタ（古すぎる記事は除外）
   const recent = items.filter((item) => {
@@ -217,17 +233,6 @@ export async function incrementalGroupArticles(
 }
 
 // ── ベクトル演算ヘルパー ─────────────────────────────────
-
-function cosineSimilarity(a: number[], b: number[]): number {
-  let dot = 0, normA = 0, normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot   += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  return denom === 0 ? 0 : dot / denom;
-}
 
 function meanVec(vecs: number[][]): number[] {
   const dim    = vecs[0].length;
