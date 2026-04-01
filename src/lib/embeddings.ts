@@ -1,5 +1,15 @@
 import { OLLAMA_BASE_URL, EMBED_MODEL } from "@/lib/config";
 
+export function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot   += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  return normA === 0 || normB === 0 ? 0 : dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
 /**
  * Ollama の埋め込みAPIでテキストをベクトル化する
  * エラー時は null を返す（埋め込みなしでも記事保存は継続する）

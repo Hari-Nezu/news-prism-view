@@ -289,7 +289,7 @@ export default function Home() {
 
       {/* URL入力バー */}
       <div className="bg-white border-b border-gray-100">
-        <form onSubmit={handleUrlSubmit} className="mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl 2xl:max-w-none py-3">
+        <form onSubmit={handleUrlSubmit} className="mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl py-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔗</span>
@@ -314,7 +314,7 @@ export default function Home() {
 
       {/* エラー / 重複メッセージ */}
       {(error || duplicateMsg) && (
-        <div className="mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl 2xl:max-w-none mt-4">
+        <div className="mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl mt-4">
           {error && (
             <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 mb-2">
               <p className="text-sm text-red-600">{error}</p>
@@ -332,7 +332,7 @@ export default function Home() {
       <div className="flex">
         {/* ニュースタイムライン（中央） */}
         <main className={`flex-1 min-w-0 transition-all duration-300 ${panelOpen ? "md:mr-[480px] 2xl:mr-0" : ""}`}>
-          <div className="px-4 sm:px-6 lg:px-8 py-6">
+          <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto">
             <RssFeedPanel
               onAnalyze={handleRssSelect}
               onCompare={() => window.location.href = "/compare"}

@@ -32,6 +32,21 @@
  *   カンマ区切りで複数指定可能。
  *   デフォルト: gemma3:12b,qwen3.5:4b,llama3.2
  *
+ * ── 類似度閾値 ─────────────────────────────────────────────
+ *
+ * GROUP_CLUSTER_THRESHOLD
+ *   groupArticlesByEvent でのembeddingクラスタリング閾値。
+ *   値が高いほど厳密（同一記事と判定しにくい）。
+ *   デフォルト: 0.72
+ *
+ * FEED_GROUP_SIMILARITY_THRESHOLD
+ *   incrementalGroupArticles での既存グループへのマッチング閾値。
+ *   デフォルト: 0.68
+ *
+ * EMBED_CLASSIFY_THRESHOLD
+ *   embeddingカテゴリ分類でのconfidence閾値。これ未満はLLMにエスカレーション。
+ *   デフォルト: 0.5
+ *
  * ── データベース ───────────────────────────────────────────
  *
  * DATABASE_URL
@@ -54,6 +69,11 @@ export const EMBED_MODEL     = process.env.EMBED_MODEL     ?? "nomic-embed-text"
 export const MULTI_MODELS    = (process.env.MULTI_MODELS   ?? "gemma3:12b,qwen3.5:4b,llama3.2")
   .split(",")
   .map((s) => s.trim());
+
+// ── 類似度閾値 ─────────────────────────────────────────────
+export const GROUP_CLUSTER_THRESHOLD   = parseFloat(process.env.GROUP_CLUSTER_THRESHOLD   ?? "0.72");
+export const FEED_GROUP_SIMILARITY_THRESHOLD = parseFloat(process.env.FEED_GROUP_SIMILARITY_THRESHOLD ?? "0.68");
+export const EMBED_CLASSIFY_THRESHOLD  = parseFloat(process.env.EMBED_CLASSIFY_THRESHOLD  ?? "0.5");
 
 // ── データベース ───────────────────────────────────────────
 export const DATABASE_URL = process.env.DATABASE_URL
