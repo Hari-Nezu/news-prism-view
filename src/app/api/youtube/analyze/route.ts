@@ -3,7 +3,7 @@ import { fetchTranscript, extractVideoId } from "@/lib/youtube-feed";
 import { saveYouTubeVideo } from "@/lib/db";
 import { embedArticle } from "@/lib/embeddings";
 import { classifyArticleLLM } from "@/lib/news-classifier-llm";
-import { ALL_YOUTUBE_CHANNELS } from "@/lib/youtube-channel-configs";
+import { ALL_YOUTUBE_CHANNELS } from "@/lib/config/youtube-channel-configs";
 import { z } from "zod";
 
 const ItemSchema = z.object({

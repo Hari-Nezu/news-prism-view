@@ -1,7 +1,7 @@
 import Parser from "rss-parser";
 import { YoutubeTranscript } from "youtube-transcript";
 import type { RssFeedItem } from "@/types";
-import { ALL_YOUTUBE_CHANNELS, DEFAULT_ENABLED_CHANNEL_IDS, type YouTubeChannelConfig } from "./youtube-channel-configs";
+import { ALL_YOUTUBE_CHANNELS, DEFAULT_ENABLED_CHANNEL_IDS, type YouTubeChannelConfig } from "./config/youtube-channel-configs";
 import { classifyArticlesBatchLLM } from "./news-classifier-llm";
 
 const parser = new Parser({

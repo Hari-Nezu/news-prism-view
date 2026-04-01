@@ -1,6 +1,6 @@
 "use client";
 
-import { ALL_YOUTUBE_CHANNELS, CATEGORY_LABELS, DEFAULT_ENABLED_CHANNEL_IDS, type YouTubeChannelConfig } from "@/lib/youtube-channel-configs";
+import { ALL_YOUTUBE_CHANNELS, CATEGORY_LABELS, DEFAULT_ENABLED_CHANNEL_IDS, type YouTubeChannelConfig } from "@/lib/config/youtube-channel-configs";
 
 interface Props {
   selected: string[];           // 内部ID の配列

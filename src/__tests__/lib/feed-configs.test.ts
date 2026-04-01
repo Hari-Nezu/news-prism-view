@@ -4,7 +4,7 @@ import {
   DEFAULT_ENABLED_IDS,
   groupFeedsByCategory,
   type FeedConfig,
-} from "@/lib/feed-configs";
+} from "@/lib/config/feed-configs";
 
 describe("ALL_FEED_SOURCES", () => {
   it("1件以上のフィードが定義されている", () => {

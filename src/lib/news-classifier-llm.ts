@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { classifyTopic, type TopicId } from "./topic-classifier";
-import { buildClassificationGuide, CATEGORIES } from "./news-taxonomy-configs";
+import { buildClassificationGuide, CATEGORIES } from "./config/news-taxonomy-configs";
 
 import { OLLAMA_BASE_URL, CLASSIFY_MODEL } from "@/lib/config";
 

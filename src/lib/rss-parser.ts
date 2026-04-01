@@ -1,6 +1,6 @@
 import Parser from "rss-parser";
 import type { RssFeedItem } from "@/types";
-import { ALL_FEED_SOURCES, DEFAULT_ENABLED_IDS, type FeedConfig } from "./feed-configs";
+import { ALL_FEED_SOURCES, DEFAULT_ENABLED_IDS, type FeedConfig } from "./config/feed-configs";
 import { fetchNewsdataArticles } from "./newsdata-client";
 import { classifyArticlesBatchLLM } from "./news-classifier-llm";
 import { validatePublicUrl } from "./article-fetcher";

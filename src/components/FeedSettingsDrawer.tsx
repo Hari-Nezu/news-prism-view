@@ -6,7 +6,7 @@ import {
   DEFAULT_ENABLED_IDS,
   groupFeedsByCategory,
   type FeedConfig,
-} from "@/lib/feed-configs";
+} from "@/lib/config/feed-configs";
 import { TOPICS, TOPIC_ORDER } from "@/lib/topic-classifier";
 
 // ── localStorage 型 ───────────────────────────────────────

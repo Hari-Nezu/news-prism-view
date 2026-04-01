@@ -6,7 +6,7 @@ import OllamaStatus from "@/components/OllamaStatus";
 import YouTubeChannelPanel from "@/components/YouTubeChannelPanel";
 import ScoreCard from "@/components/ScoreCard";
 import PositioningPlot from "@/components/PositioningPlot";
-import { DEFAULT_ENABLED_CHANNEL_IDS } from "@/lib/youtube-channel-configs";
+import { DEFAULT_ENABLED_CHANNEL_IDS } from "@/lib/config/youtube-channel-configs";
 import type { AnalyzedArticle, MultiModelAnalyzedArticle, RssFeedItem } from "@/types";
 
 type YouTubeStep =

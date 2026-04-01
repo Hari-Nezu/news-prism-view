@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { classifyArticleLLM } from "@/lib/news-classifier-llm";
-import { CATEGORY_MAP } from "@/lib/news-taxonomy-configs";
+import { CATEGORY_MAP } from "@/lib/config/news-taxonomy-configs";
 
 const RequestSchema = z.object({
   title:   z.string().min(1),
