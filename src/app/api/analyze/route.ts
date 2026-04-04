@@ -20,8 +20,8 @@ export async function POST(request: Request) {
     // ── シングルモデル（従来動作） ──
     if (!multiModel) {
       const analysis = await analyzeArticle(title, content);
-      const { category: topic, subcategory } = await classifyArticleLLM(title, analysis.summary);
-      const article = { title, content, url, source, analysis, analyzedAt: new Date().toISOString(), topic, subcategory };
+      const { category, subcategory } = await classifyArticleLLM(title, analysis.summary);
+      const article = { title, content, url, source, analysis, analyzedAt: new Date().toISOString(), category, subcategory };
       embedArticle(title, analysis.summary)
         .then((embedding) => saveArticle(article, embedding ?? undefined))
         .catch((err) => console.error("[analyze] DB保存エラー:", err));
@@ -45,8 +45,8 @@ export async function POST(request: Request) {
 
         // DB保存（コンセンサス = 1モデル目の結果）
         if (firstAnalysis) {
-          const { category: topic, subcategory } = await classifyArticleLLM(title, firstAnalysis.summary);
-          const article = { title, content, url, source, analysis: firstAnalysis, analyzedAt: new Date().toISOString(), topic, subcategory };
+          const { category, subcategory } = await classifyArticleLLM(title, firstAnalysis.summary);
+          const article = { title, content, url, source, analysis: firstAnalysis, analyzedAt: new Date().toISOString(), category, subcategory };
           embedArticle(title, firstAnalysis.summary)
             .then((embedding) => saveArticle(article, embedding ?? undefined))
             .catch((err) => console.error("[analyze] DB保存エラー:", err));

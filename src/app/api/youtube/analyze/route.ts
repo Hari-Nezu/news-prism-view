@@ -65,7 +65,7 @@ export async function POST(request: Request) {
 
           // 分析
           const analysis = await analyzeArticle(item.title, transcript);
-          const { category: topic, subcategory } = await classifyArticleLLM(item.title, analysis.summary);
+          const { category, subcategory } = await classifyArticleLLM(item.title, analysis.summary);
 
           // チャンネルID を config から取得
           const channelConfig = ALL_YOUTUBE_CHANNELS.find((c) => c.name === item.source);
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
             publishedAt:   item.publishedAt,
             analysis,
             analyzedAt:    new Date().toISOString(),
-            topic,
+            category,
             transcriptType,
           };
 
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
                     confidence:    analysis.confidence,
                     summary:       analysis.summary,
                     counterOpinion: analysis.counterOpinion,
-                    topic,
+                    category,
                     subcategory,
                   },
                   embedding ?? undefined

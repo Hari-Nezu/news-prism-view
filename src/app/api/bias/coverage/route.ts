@@ -7,7 +7,8 @@ import type { RssFeedItem } from "@/types";
 
 export interface CoverageGroup {
   groupTitle: string;
-  topic: string;
+  topic: string;          // = groupTitle（具体的なイベント名）
+  category: string;       // 大分類（"politics" | "economy" | ...）
   coveredBy: string[];    // 報じた媒体名（config.name）
   silentMedia: string[];  // 報じなかった媒体名
   items: RssFeedItem[];
@@ -42,7 +43,8 @@ export async function GET() {
       const silentMedia = fetchedMedia.filter((m) => !coveredBy.includes(m)).sort();
       return {
         groupTitle:  g.groupTitle,
-        topic:       g.topic ?? "other",
+        topic:       g.topic ?? g.groupTitle,
+        category:    g.category ?? "other",
         coveredBy,
         silentMedia,
         items:       g.items,

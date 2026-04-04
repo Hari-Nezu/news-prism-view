@@ -22,13 +22,47 @@ const NamingSchema = z.object({
 });
 
 /**
+ * 全記事タイトルに共通して出現するキーワードを抽出する。
+ * LLMへのヒントとして使用し、共通テーマの命名精度を上げる。
+ */
+function extractCommonKeywords(items: RssFeedItem[]): string[] {
+  if (items.length <= 1) return [];
+  const threshold = Math.max(2, Math.ceil(items.length * 0.5)); // 過半数以上に出現
+  const tokenSets = items.map((item) =>
+    new Set(
+      item.title
+        .replace(/[「」『』（）()\[\]【】、。・＝=→←↑↓]/g, " ")
+        .split(/[\s　]+/)
+        .filter((w) => w.length >= 2)
+    )
+  );
+  const freq = new Map<string, number>();
+  for (const tokens of tokenSets) {
+    for (const t of tokens) freq.set(t, (freq.get(t) ?? 0) + 1);
+  }
+  return [...freq.entries()]
+    .filter(([, c]) => c >= threshold)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([w]) => w);
+}
+
+/**
  * クラスタ群に日本語タイトルをつける（LLMの役割はここだけ）
- * 失敗時は各クラスタの先頭タイトルをそのまま使う
+ * 失敗時は各クラスタの共通ワードから構成する
  */
 async function nameGroupClusters(clusters: RssFeedItem[][]): Promise<string[]> {
   const clusterList = clusters
-    .map((items, i) => `グループ${i}: ${items.map((item) => `「${item.title}」`).join(" ")}`)
-    .join("\n");
+    .map((items, i) => {
+      const cat = dominantCategory(items);
+      const sub = dominantSubcategory(items);
+      const context = (sub && sub !== "other") ? `${cat} > ${sub}` : cat;
+      const common = extractCommonKeywords(items);
+      const commonLine = common.length > 0 ? `\n  共通キーワード: ${common.join("・")}` : "";
+      const titles = items.map((item) => `「${item.title}」`).join(" ");
+      return `グループ${i}（${context}）${commonLine}\n  記事: ${titles}`;
+    })
+    .join("\n\n");
 
   try {
     const res = await fetch(`${LLM_BASE_URL}/v1/chat/completions`, {
@@ -39,8 +73,19 @@ async function nameGroupClusters(clusters: RssFeedItem[][]): Promise<string[]> {
         messages: [
           {
             role: "system",
-            content: `各グループの記事群が共通して報じているトピックを20字以内の簡潔な日本語で表してください。
-特定の記事タイトルをそのまま使うのではなく、グループ全体に共通する出来事・テーマを抽出してください。
+            content: `各グループの「全記事」が共通して報じている出来事を、20字以内の自然な日本語で命名してください。
+
+命名スタイル:
+- 体言止め（名詞句）を基本とする。例:「日銀の利上げ決定」「トランプ関税と円安」「能登地震の復興状況」
+- 述語（〜した・〜される）で終わらせない
+- 助詞・助動詞を最小限にして読みやすくする
+- 固有名詞（人名・地名・組織名）は積極的に使う
+
+制約:
+- 「共通キーワード」に示した語を中心に命名する
+- グループ内の一部の記事にしか当てはまらない内容は含めない
+- 特定の記事タイトルをそのままコピーしない
+
 必ずJSON形式のみで回答してください。
 出力フォーマット: { "groups": [{ "index": 0, "title": "タイトル" }, ...] }`,
           },
@@ -64,23 +109,11 @@ async function nameGroupClusters(clusters: RssFeedItem[][]): Promise<string[]> {
   }
 }
 
-/** LLM失敗時のフォールバック: 複数記事なら共通ワードを抽出、1記事なら先頭を切り取り */
+/** LLM失敗時のフォールバック: 全記事共通キーワードを結合、なければ先頭記事を切り取り */
 function fallbackTitle(items: RssFeedItem[]): string {
-  if (items.length <= 1) return items[0].title.slice(0, 30);
-  // 各タイトルを単語に分割し、2記事以上に出現するワードを抽出
-  const tokenSets = items.map((item) =>
-    new Set(item.title.replace(/[「」『』（）\(\)【】]/g, " ").split(/\s+/).filter((w) => w.length >= 2))
-  );
-  const freq = new Map<string, number>();
-  for (const tokens of tokenSets) {
-    for (const t of tokens) freq.set(t, (freq.get(t) ?? 0) + 1);
-  }
-  const common = [...freq.entries()]
-    .filter(([, c]) => c >= 2)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4)
-    .map(([w]) => w);
-  return common.length > 0 ? common.join(" ").slice(0, 30) : items[0].title.slice(0, 30);
+  const common = extractCommonKeywords(items);
+  if (common.length > 0) return common.join(" ").slice(0, 30);
+  return items[0].title.slice(0, 30);
 }
 
 /**
@@ -98,14 +131,16 @@ export async function groupArticlesByEvent(
   const vecs    = await embedBatch(targets.map((i) => i.summary ? `${i.title}\n${i.summary.slice(0, 200)}` : i.title));
 
   // Greedy クラスタリング: 類似度が閾値以上の最近傍クラスタに追加
-  type Cluster = { centroid: number[]; items: RssFeedItem[]; vecs: number[][] };
+  // 異カテゴリ間はコサイン類似度を30%減衰させる（ソフトフィルタ）
+  type Cluster = { centroid: number[]; items: RssFeedItem[]; vecs: number[][]; dominantCat: string };
   const clusters: Cluster[] = [];
 
   for (let i = 0; i < targets.length; i++) {
-    const vec = vecs[i];
+    const vec  = vecs[i];
+    const item = targets[i];
     if (!vec) {
       // embedding 失敗 → 単独クラスタとして追加（タイトルをそのまま使用）
-      clusters.push({ centroid: [], items: [targets[i]], vecs: [] });
+      clusters.push({ centroid: [], items: [item], vecs: [], dominantCat: item.category ?? "other" });
       continue;
     }
 
@@ -114,16 +149,23 @@ export async function groupArticlesByEvent(
 
     for (const cluster of clusters) {
       if (cluster.centroid.length === 0) continue;
-      const sim = cosineSimilarity(vec, cluster.centroid);
+      const rawSim = cosineSimilarity(vec, cluster.centroid);
+      // カテゴリが判明している場合のみ減衰。"other" 同士は減衰しない
+      const catMismatch =
+        item.category && item.category !== "other" &&
+        cluster.dominantCat !== "other" &&
+        item.category !== cluster.dominantCat;
+      const sim = catMismatch ? rawSim * 0.7 : rawSim;
       if (sim > bestSim) { bestSim = sim; bestCluster = cluster; }
     }
 
     if (bestCluster) {
-      bestCluster.items.push(targets[i]);
+      bestCluster.items.push(item);
       bestCluster.vecs.push(vec);
-      bestCluster.centroid = meanVec(bestCluster.vecs);
+      bestCluster.centroid    = meanVec(bestCluster.vecs);
+      bestCluster.dominantCat = dominantCategory(bestCluster.items);
     } else {
-      clusters.push({ centroid: vec, items: [targets[i]], vecs: [vec] });
+      clusters.push({ centroid: vec, items: [item], vecs: [vec], dominantCat: item.category ?? "other" });
     }
   }
 
@@ -134,7 +176,9 @@ export async function groupArticlesByEvent(
     groupTitle:   titles[i],
     items:        cluster.items,
     singleOutlet: new Set(cluster.items.map((item) => item.source)).size <= 1,
-    topic:        dominantTopic(cluster.items),
+    topic:        titles[i],
+    category:     dominantCategory(cluster.items),
+    subcategory:  dominantSubcategory(cluster.items),
   }));
 
   groups.sort((a, b) => {
@@ -234,7 +278,9 @@ export async function incrementalGroupArticles(
       groupTitle:   group.title,
       items:        assigned,
       singleOutlet: new Set(assigned.map((i) => i.source)).size <= 1,
-      topic:        dominantTopic(assigned),
+      topic:        group.title,
+      category:     dominantCategory(assigned),
+      subcategory:  dominantSubcategory(assigned),
     });
   }
 
@@ -260,15 +306,29 @@ export async function incrementalGroupArticles(
   return [...matchedGroups, ...newGroups];
 }
 
-// ── トピックヘルパー ─────────────────────────────────────
+// ── カテゴリヘルパー ─────────────────────────────────────
 
-function dominantTopic(items: RssFeedItem[]): string {
+function dominantCategory(items: RssFeedItem[]): string {
   const counts = new Map<string, number>();
   for (const item of items) {
-    const t = item.topic ?? "other";
+    const t = item.category ?? "other";
     counts.set(t, (counts.get(t) ?? 0) + 1);
   }
   let best = "other", bestN = 0;
+  for (const [t, n] of counts) {
+    if (n > bestN) { bestN = n; best = t; }
+  }
+  return best;
+}
+
+function dominantSubcategory(items: RssFeedItem[]): string | undefined {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (!item.subcategory) continue;
+    counts.set(item.subcategory, (counts.get(item.subcategory) ?? 0) + 1);
+  }
+  if (counts.size === 0) return undefined;
+  let best = "", bestN = 0;
   for (const [t, n] of counts) {
     if (n > bestN) { bestN = n; best = t; }
   }

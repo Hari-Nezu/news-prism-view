@@ -32,9 +32,9 @@ export default function ArticleHistory({ onRestore }: Props) {
   const scoreLabel = (val: number) =>
     val > 0.3 ? "革新" : val < -0.3 ? "保守" : "中立";
 
-  // トピック別にグループ化
+  // カテゴリ別にグループ化
   const grouped = articles.reduce<Record<string, AnalyzedArticle[]>>((acc, a) => {
-    const key = a.topic ?? "other";
+    const key = a.category ?? "other";
     (acc[key] ??= []).push(a);
     return acc;
   }, {});

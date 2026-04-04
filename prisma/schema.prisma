@@ -27,7 +27,7 @@ model Article {
   summary        String
   counterOpinion String
 
-  topic          String?
+  category       String?
   subcategory    String?
 
   // 埋め込みベクトル（ruri-v3-310m = 1024次元）
@@ -47,7 +47,7 @@ model RssArticle {
   summary     String?
   imageUrl    String?
   publishedAt DateTime?
-  topic       String?
+  category    String?
   subcategory String?
   fetchedAt   DateTime  @default(now())
 
@@ -141,7 +141,7 @@ model YouTubeVideo {
   summary        String
   counterOpinion String
 
-  topic          String?
+  category       String?
   subcategory    String?
 
   embedding      Unsupported("vector(1024)")?

@@ -175,21 +175,25 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
   const [isGrouping,    setIsGrouping]    = useState(false);
   const [groupError,    setGroupError]    = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
+  const [groupDate,     setGroupDate]     = useState<string>(() => new Date().toISOString().slice(0, 10));
 
   useEffect(() => {
     setSettings(loadFeedSettings());
   }, []);
 
-  const groupItems = useCallback(async (targetItems: RssFeedItem[]) => {
+  const groupItems = useCallback(async (targetItems: RssFeedItem[], targetDate?: string) => {
     setIsGrouping(true);
     setGroupError("");
     setGroups([]);
     setExpandedGroups(new Set());
     try {
+      const body = targetDate
+        ? { targetDate }
+        : { items: targetItems };
       const res = await fetch("/api/rss/group", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: targetItems }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "グループ化に失敗しました");
@@ -267,8 +271,17 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
   function handleGroupToggle() {
     const next: GroupMode = groupMode === "off" ? "ranking" : "off";
     setGroupMode(next);
-    if (next === "ranking" && groups.length === 0 && items.length > 0) {
-      groupItems(items);
+    if (next === "ranking" && groups.length === 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      groupDate !== today ? groupItems([], groupDate) : groupItems(items);
+    }
+  }
+
+  function handleGroupDateChange(date: string) {
+    setGroupDate(date);
+    if (groupMode === "ranking") {
+      const today = new Date().toISOString().slice(0, 10);
+      date !== today ? groupItems([], date) : groupItems(items);
     }
   }
 
@@ -285,7 +298,7 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
   const columns = visibleTopics.filter((id) => id !== "other").map((topicId) => ({
     topicId: topicId as TopicId,
     def: getTopicDef(topicId as TopicId),
-    items: items.filter((item) => (item.topic ?? "other") === topicId),
+    items: items.filter((item) => (item.category ?? "other") === topicId),
   }));
 
   const isColumnView = columns.length > 0;
@@ -361,6 +374,20 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
       {/* ── ランキング表示モード ── */}
       {groupMode === "ranking" ? (
         <div>
+          {/* 日付ピッカー */}
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs text-gray-500">対象日:</span>
+            <input
+              type="date"
+              value={groupDate}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => handleGroupDateChange(e.target.value)}
+              disabled={isGrouping}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-amber-300 disabled:opacity-50"
+            />
+            <span className="text-[10px] text-gray-400">（その日を含む直近3日間）</span>
+          </div>
+
           {groupError && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 mb-3">
               <p className="text-sm text-red-600">{groupError}</p>

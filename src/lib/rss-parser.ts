@@ -110,7 +110,7 @@ export async function fetchRssFeed(
   const classifications = await classifyArticlesBatchLLM(filtered);
   return filtered.map((item, i) => ({
     ...item,
-    topic:       classifications[i].category,
+    category:    classifications[i].category,
     subcategory: classifications[i].subcategory,
   }));
 }
@@ -197,11 +197,11 @@ export async function fetchAllDefaultFeeds(
   });
 
   // 未分類の記事を一括でLLM分類（fetchFeedByConfig では topic を付けていない）
-  const unclassified = sorted.filter((item) => !item.topic);
+  const unclassified = sorted.filter((item) => !item.category);
   if (unclassified.length > 0) {
     const classifications = await classifyArticlesBatchLLM(unclassified);
     unclassified.forEach((item, i) => {
-      item.topic       = classifications[i].category;
+      item.category    = classifications[i].category;
       item.subcategory = classifications[i].subcategory;
     });
   }

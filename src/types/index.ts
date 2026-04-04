@@ -24,7 +24,7 @@ export interface Article {
 export interface AnalyzedArticle extends Article {
   analysis: AnalysisResult;
   analyzedAt: string;
-  topic?: string;
+  category?: string;
   subcategory?: string;
 }
 
@@ -35,18 +35,20 @@ export interface RssFeedItem {
   publishedAt?: string;
   source: string;
   imageUrl?: string;
-  topic?: string;       // カテゴリID（"politics" | "economy" | ... | "other"）
-  subcategory?: string; // サブカテゴリID（"diplomacy" | "domestic_politics" | ...）
+  category?: string;    // 大分類ID（"politics" | "economy" | ... | "other"）
+  subcategory?: string; // 中分類ID（"diplomacy" | "domestic_politics" | ...）
 }
 
 // ── メディア比較ページ用 ──────────────────────────────
 
 /** Ollamaがグループ化した「同一ニュース」のひとまとまり */
 export interface NewsGroup {
-  groupTitle: string;        // Ollamaが命名した見出し（例: "防衛費増額の閣議決定"）
+  groupTitle: string;        // LLMが命名した具体的なイベント名（= topic）
   items: RssFeedItem[];      // 同一ニュースと判定された記事群
   singleOutlet: boolean;     // true = 1媒体のみ報道（比較不可）
-  topic?: string;            // 支配的トピック（TopicId | "other"）
+  topic?: string;            // = groupTitle（具体的なイベント名）
+  category?: string;         // グループ内の支配的大分類（"politics" | "economy" | ...）
+  subcategory?: string;      // グループ内の支配的中分類
 }
 
 /** ニュースフィードのグループ表示モード */

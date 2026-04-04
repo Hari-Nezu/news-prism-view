@@ -1,31 +1,41 @@
 export const maxDuration = 300; // 5分
 
 import { incrementalGroupArticles } from "@/lib/news-grouper";
-import { getRssArticlesSince, deleteStaleRssArticles } from "@/lib/db";
+import { getRssArticlesSince, getRssArticlesBetween, deleteStaleRssArticles } from "@/lib/db";
 import type { RssFeedItem } from "@/types";
 
 const WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
 export async function POST(request: Request) {
   try {
-    const { items }: { items: RssFeedItem[] } = await request.json();
+    const body: { items?: RssFeedItem[]; targetDate?: string } = await request.json();
+    const { items, targetDate } = body;
 
-    // DBから過去3日分を取得し、フレッシュアイテムとマージ（URL重複排除）
-    const since = new Date(Date.now() - WINDOW_MS);
-    const dbItems = await getRssArticlesSince(since).catch(() => [] as RssFeedItem[]);
+    let merged: RssFeedItem[];
 
-    const seen = new Set<string>();
-    const merged: RssFeedItem[] = [];
-    for (const item of [...(items ?? []), ...dbItems]) {
-      if (!item.url || seen.has(item.url)) continue;
-      seen.add(item.url);
-      merged.push(item);
+    if (targetDate) {
+      // 日付指定モード: targetDate を終端とした3日ウィンドウをDBから取得
+      const until = new Date(targetDate);
+      until.setHours(23, 59, 59, 999); // 当日末尾まで含む
+      const since = new Date(until.getTime() - WINDOW_MS);
+      merged = await getRssArticlesBetween(since, until).catch(() => [] as RssFeedItem[]);
+    } else {
+      // 通常モード: 現在時刻から過去3日 + フレッシュ記事をマージ
+      const since = new Date(Date.now() - WINDOW_MS);
+      const dbItems = await getRssArticlesSince(since).catch(() => [] as RssFeedItem[]);
+
+      const seen = new Set<string>();
+      merged = [];
+      for (const item of [...(items ?? []), ...dbItems]) {
+        if (!item.url || seen.has(item.url)) continue;
+        seen.add(item.url);
+        merged.push(item);
+      }
+
+      void deleteStaleRssArticles().catch(() => {});
     }
 
     if (merged.length === 0) return Response.json({ groups: [] });
-
-    // 古い記事を非同期で削除
-    void deleteStaleRssArticles().catch(() => {});
 
     const groups = await incrementalGroupArticles(merged);
     return Response.json({ groups });

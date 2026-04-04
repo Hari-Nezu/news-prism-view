@@ -29,7 +29,7 @@ export async function saveArticle(
   article: AnalyzedArticle,
   embedding?: number[]
 ): Promise<string> {
-  const { title, content, url, source, publishedAt, analysis, topic, subcategory } = article;
+  const { title, content, url, source, publishedAt, analysis, category, subcategory } = article;
 
   const saved = await getPrisma().article.create({
     data: {
@@ -38,7 +38,7 @@ export async function saveArticle(
       url: url ?? null,
       source: source ?? null,
       publishedAt: publishedAt ?? null,
-      topic: topic ?? null,
+      category: category ?? null,
       subcategory: subcategory ?? null,
       economic:      analysis.scores.economic,
       social:        analysis.scores.social,
@@ -76,7 +76,7 @@ export async function getRecentArticles(limit = 30): Promise<AnalyzedArticle[]> 
       source: true,
       publishedAt: true,
       analyzedAt: true,
-      topic: true,
+      category: true,
       subcategory: true,
       economic: true,
       social: true,
@@ -361,16 +361,16 @@ export async function upsertRssArticles(items: RssFeedItem[]): Promise<void> {
       params.push(
         item.url, item.title, item.source,
         item.summary ?? null, item.imageUrl ?? null, validDate,
-        item.topic ?? null, item.subcategory ?? null,
+        item.category ?? null, item.subcategory ?? null,
       );
       return `(gen_random_uuid()::text, $${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, NOW())`;
     });
 
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "RssArticle" (id, url, title, source, summary, "imageUrl", "publishedAt", topic, subcategory, "fetchedAt")
+      `INSERT INTO "RssArticle" (id, url, title, source, summary, "imageUrl", "publishedAt", category, subcategory, "fetchedAt")
        VALUES ${rows.join(", ")}
        ON CONFLICT (url) DO UPDATE SET
-         topic       = COALESCE(EXCLUDED.topic, "RssArticle".topic),
+         category    = COALESCE(EXCLUDED.category, "RssArticle".category),
          subcategory = COALESCE(EXCLUDED.subcategory, "RssArticle".subcategory),
          "fetchedAt" = NOW()`,
       ...params,
@@ -381,7 +381,7 @@ export async function upsertRssArticles(items: RssFeedItem[]): Promise<void> {
 /** 指定日時以降に fetchedAt された記事を取得 */
 export async function getRssArticlesSince(since: Date): Promise<RssFeedItem[]> {
   const rows = await getPrisma().$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `SELECT url, title, source, summary, "imageUrl", "publishedAt", topic, subcategory
+    `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
      FROM "RssArticle"
      WHERE "fetchedAt" >= $1
      ORDER BY "publishedAt" DESC NULLS LAST`,
@@ -394,7 +394,29 @@ export async function getRssArticlesSince(since: Date): Promise<RssFeedItem[]> {
     summary:     r.summary != null ? String(r.summary) : undefined,
     imageUrl:    r.imageUrl != null ? String(r.imageUrl) : undefined,
     publishedAt: r.publishedAt instanceof Date ? r.publishedAt.toISOString() : r.publishedAt != null ? String(r.publishedAt) : undefined,
-    topic:       r.topic != null ? String(r.topic) : undefined,
+    category:    r.category != null ? String(r.category) : undefined,
+    subcategory: r.subcategory != null ? String(r.subcategory) : undefined,
+  }));
+}
+
+/** 指定期間内（since〜until）に publishedAt がある記事を取得 */
+export async function getRssArticlesBetween(since: Date, until: Date): Promise<RssFeedItem[]> {
+  const rows = await getPrisma().$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
+     FROM "RssArticle"
+     WHERE "publishedAt" >= $1 AND "publishedAt" <= $2
+     ORDER BY "publishedAt" DESC NULLS LAST`,
+    since,
+    until,
+  );
+  return rows.map((r) => ({
+    url:         String(r.url),
+    title:       String(r.title),
+    source:      String(r.source),
+    summary:     r.summary != null ? String(r.summary) : undefined,
+    imageUrl:    r.imageUrl != null ? String(r.imageUrl) : undefined,
+    publishedAt: r.publishedAt instanceof Date ? r.publishedAt.toISOString() : r.publishedAt != null ? String(r.publishedAt) : undefined,
+    category:    r.category != null ? String(r.category) : undefined,
     subcategory: r.subcategory != null ? String(r.subcategory) : undefined,
   }));
 }
@@ -426,7 +448,7 @@ export interface YouTubeVideoSaveInput {
   confidence:    number;
   summary:       string;
   counterOpinion: string;
-  topic?:        string;
+  category?:     string;
   subcategory?:  string;
 }
 
@@ -490,7 +512,7 @@ function rowToAnalyzedArticle(r: Record<string, unknown>): AnalyzedArticle {
     analyzedAt: r.analyzedAt instanceof Date
       ? r.analyzedAt.toISOString()
       : String(r.analyzedAt ?? new Date().toISOString()),
-    topic:       r.topic       ? String(r.topic)       : undefined,
+    category:    r.category    ? String(r.category)    : undefined,
     subcategory: r.subcategory ? String(r.subcategory) : undefined,
   };
 }

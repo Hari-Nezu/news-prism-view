@@ -15,11 +15,11 @@
  * LLM_MODEL
  *   3軸政治分析（economic/social/diplomatic スコアリング）に使うモデル。
  *   llama.cppサーバーにロードされているモデル名を指定。
- *   デフォルト: ggml-org/gemma3:4b
+ *   デフォルト: ggml-org/gemma-4-E4B-it-Q8_0
  *
  * CLASSIFY_MODEL
  *   ニュースカテゴリ分類（8カテゴリ × 34サブカテゴリ）に使うモデル。
- *   デフォルト: ggml-org/gemma3:4b
+ *   デフォルト: ggml-org/gemma-4-E4B-it-Q8_0
  *
  * EMBED_MODEL
  *   テキストのベクトル埋め込みに使うモデル。
@@ -29,7 +29,7 @@
  * MULTI_MODELS
  *   マルチモデル分析モード（/analyze?multiModel=true）で使うモデル一覧。
  *   カンマ区切りで複数指定可能。llama.cppは1サーバー1モデルのため通常は1つ。
- *   デフォルト: ggml-org/gemma3:4b
+ *   デフォルト: ggml-org/gemma-4-E4B-it-Q8_0
  *
  * ── 類似度閾値 ─────────────────────────────────────────────
  *
@@ -62,10 +62,10 @@
 
 // ── llama.cpp ─────────────────────────────────────────────
 export const LLM_BASE_URL    = process.env.LLM_BASE_URL    ?? "http://localhost:8081";
-export const LLM_MODEL       = process.env.LLM_MODEL       ?? "ggml-org/gemma-3-4b-it-GGUF:Q4_K_M";
-export const CLASSIFY_MODEL  = process.env.CLASSIFY_MODEL  ?? "ggml-org/gemma-3-4b-it-GGUF:Q4_K_M";
+export const LLM_MODEL       = process.env.LLM_MODEL       ?? "ggml-org/gemma-4-E4B-it-Q8_0";
+export const CLASSIFY_MODEL  = process.env.CLASSIFY_MODEL  ?? "ggml-org/gemma-4-E4B-it-Q8_0";
 export const EMBED_MODEL     = process.env.EMBED_MODEL     ?? "Targoyle/ruri-v3-310m-GGUF:Q8_0";
-export const MULTI_MODELS    = (process.env.MULTI_MODELS   ?? "ggml-org/gemma3:4b")
+export const MULTI_MODELS    = (process.env.MULTI_MODELS   ?? "ggml-org/gemma-4-E4B-it-Q8_0")
   .split(",")
   .map((s) => s.trim());
 
