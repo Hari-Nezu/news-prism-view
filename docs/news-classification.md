@@ -115,7 +115,7 @@ classifyArticlesBatchLLM(items[])
 バッチ処理により、Embeddingで確定できた記事はLLMコストゼロ。
 
 ---
-
+　
 ## 設定値
 
 | 環境変数 | デフォルト | 説明 |

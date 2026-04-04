@@ -1,6 +1,6 @@
 /**
  * ニュース分類器（Phase A: Embedding → LLM カスケード）
- * - Step 1: nomic-embed-text によるコサイン類似度分類（~100ms/記事）
+ * - Step 1: ruri-v3-310m によるコサイン類似度分類（~100ms/記事）
  * - Step 2: similarity < EMBED_THRESHOLD のみ LLM にフォールバック
  * - Ollama 障害時はキーワード分類にフォールバック
  */
@@ -8,8 +8,8 @@
 import { z } from "zod";
 import { classifyTopic, type TopicId } from "./topic-classifier";
 import { buildClassificationGuide, CATEGORIES } from "./config/news-taxonomy-configs";
-import { embed, embedBatch, cosineSimilarity } from "./embeddings";
-import { OLLAMA_BASE_URL, CLASSIFY_MODEL, EMBED_CLASSIFY_THRESHOLD } from "@/lib/config";
+import { embed, embedBatch, cosineSimilarity, RURI_PREFIX } from "./embeddings";
+import { LLM_BASE_URL, CLASSIFY_MODEL, EMBED_CLASSIFY_THRESHOLD } from "@/lib/config";
 
 export interface ClassificationResult {
   category:    TopicId;
@@ -44,7 +44,8 @@ async function initReferenceEmbeddings(): Promise<SubcategoryRef[]> {
     }))
   );
 
-  const vecs = await embedBatch(entries.map((e) => e.text));
+  // カテゴリ説明はドキュメント側
+  const vecs = await embedBatch(entries.map((e) => e.text), RURI_PREFIX.DOC);
   return entries.flatMap((e, i) =>
     vecs[i] ? [{ categoryId: e.categoryId, subcategoryId: e.subcategoryId, vec: vecs[i]! }] : []
   );
@@ -70,8 +71,9 @@ async function classifyByEmbedding(
   const refs = await getReferenceEmbeddings();
   if (refs.length === 0) return null;
 
+  // 分類時の記事はクエリ側
   const text = summary ? `${title}\n${summary.slice(0, 300)}` : title;
-  const vec  = await embed(text);
+  const vec  = await embed(text, RURI_PREFIX.QUERY);
   if (!vec) return null;
 
   const result = pickBestRef(vec, refs);
@@ -136,24 +138,26 @@ async function classifyWithLLM(title: string, summary?: string): Promise<Classif
     : `タイトル: ${title}`;
 
   try {
-    const res = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+    const res = await fetch(`${LLM_BASE_URL}/v1/chat/completions`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model:   CLASSIFY_MODEL,
-        system:  SYSTEM_PROMPT,
-        prompt:  `以下の記事を分類してください。\n\n${content}`,
-        stream:  false,
-        format:  "json",
-        options: { temperature: 0.1 },
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user",   content: `以下の記事を分類してください。\n\n${content}` },
+        ],
+        stream:          false,
+        response_format: { type: "json_object" },
+        temperature:     0.1,
       }),
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(120_000),
     });
 
-    if (!res.ok) throw new Error(`Ollama ${res.status}`);
+    if (!res.ok) throw new Error(`llama.cpp ${res.status}`);
 
     const data        = await res.json();
-    const parsed      = SingleSchema.parse(JSON.parse(data.response));
+    const parsed      = SingleSchema.parse(JSON.parse(data.choices[0].message.content));
     const category    = resolveCategory(parsed.category, title, summary);
     const subcategory = resolveSubcategory(category, parsed.subcategory);
     return { category, subcategory, confidence: parsed.confidence };
@@ -174,24 +178,26 @@ async function classifyBatchWithLLM(
     .join("\n");
 
   try {
-    const res = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+    const res = await fetch(`${LLM_BASE_URL}/v1/chat/completions`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model:   CLASSIFY_MODEL,
-        system:  SYSTEM_PROMPT,
-        prompt:  `以下の${items.length}件の記事を分類してください。\n\n${articleList}`,
-        stream:  false,
-        format:  "json",
-        options: { temperature: 0.1 },
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user",   content: `以下の${items.length}件の記事を分類してください。\n\n${articleList}` },
+        ],
+        stream:          false,
+        response_format: { type: "json_object" },
+        temperature:     0.1,
       }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(120_000),
     });
 
-    if (!res.ok) throw new Error(`Ollama ${res.status}`);
+    if (!res.ok) throw new Error(`llama.cpp ${res.status}`);
 
     const data      = await res.json();
-    const parsed    = BatchSchema.parse(JSON.parse(data.response));
+    const parsed    = BatchSchema.parse(JSON.parse(data.choices[0].message.content));
     const resultMap = new Map(parsed.results.map((r) => [r.index, r]));
 
     return items.map((item, i) => {
@@ -229,7 +235,8 @@ export async function classifyArticlesBatchLLM(
     item.summary ? `${item.title}\n${item.summary.slice(0, 300)}` : item.title
   );
 
-  const vecs = refs.length > 0 ? await embedBatch(texts) : items.map(() => null);
+  // 分類時の記事はクエリ側
+  const vecs = refs.length > 0 ? await embedBatch(texts, RURI_PREFIX.QUERY) : items.map(() => null);
 
   const results: (ClassificationResult | null)[] = vecs.map((vec) => {
     if (!vec || refs.length === 0) return null;

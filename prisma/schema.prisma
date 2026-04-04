@@ -30,9 +30,9 @@ model Article {
   topic          String?
   subcategory    String?
 
-  // 埋め込みベクトル（nomic-embed-text = 768次元）
+  // 埋め込みベクトル（ruri-v3-310m = 1024次元）
   // Prisma未対応型のため INSERT/SELECT は生SQL で処理
-  embedding      Unsupported("vector(768)")?
+  embedding      Unsupported("vector(1024)")?
 
   @@index([url])
   @@index([analyzedAt(sort: Desc)])
@@ -62,7 +62,7 @@ model FeedGroup {
   articleCount Int             @default(0)
   lastSeenAt   DateTime        @default(now())
   createdAt    DateTime        @default(now())
-  embedding    Unsupported("vector(768)")?
+  embedding    Unsupported("vector(1024)")?
   items        FeedGroupItem[]
 
   @@index([lastSeenAt(sort: Desc)])
@@ -113,7 +113,7 @@ model CompareGroupRecord {
   savedAt      DateTime @default(now())
 
   // 埋め込みベクトル（グループタイトル + 記事タイトル群 + 媒体名）
-  embedding    Unsupported("vector(768)")?
+  embedding    Unsupported("vector(1024)")?
 
   @@index([savedAt(sort: Desc)])
 }
@@ -144,7 +144,7 @@ model YouTubeVideo {
   topic          String?
   subcategory    String?
 
-  embedding      Unsupported("vector(768)")?
+  embedding      Unsupported("vector(1024)")?
 
   @@index([channelId])
   @@index([analyzedAt(sort: Desc)])
@@ -171,5 +171,5 @@ model CompareResult {
   summary        String
   counterOpinion String
 
-  embedding      Unsupported("vector(768)")?
+  embedding      Unsupported("vector(1024)")?
 }

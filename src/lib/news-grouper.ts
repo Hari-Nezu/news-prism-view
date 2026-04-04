@@ -10,7 +10,7 @@ import {
   type FeedGroupRecord,
 } from "@/lib/db";
 
-import { OLLAMA_BASE_URL, OLLAMA_MODEL, GROUP_CLUSTER_THRESHOLD, FEED_GROUP_SIMILARITY_THRESHOLD } from "@/lib/config";
+import { LLM_BASE_URL, LLM_MODEL, GROUP_CLUSTER_THRESHOLD, FEED_GROUP_SIMILARITY_THRESHOLD } from "@/lib/config";
 
 const NamingSchema = z.object({
   groups: z.array(
@@ -31,30 +31,56 @@ async function nameGroupClusters(clusters: RssFeedItem[][]): Promise<string[]> {
     .join("\n");
 
   try {
-    const res = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+    const res = await fetch(`${LLM_BASE_URL}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        system: `各グループに20字以内の簡潔な日本語タイトルをつけてください。必ずJSON形式のみで回答してください。
+        model: LLM_MODEL,
+        messages: [
+          {
+            role: "system",
+            content: `各グループの記事群が共通して報じているトピックを20字以内の簡潔な日本語で表してください。
+特定の記事タイトルをそのまま使うのではなく、グループ全体に共通する出来事・テーマを抽出してください。
+必ずJSON形式のみで回答してください。
 出力フォーマット: { "groups": [{ "index": 0, "title": "タイトル" }, ...] }`,
-        prompt: clusterList,
-        stream: false,
-        format: "json",
-        options: { temperature: 0.1 },
+          },
+          { role: "user", content: clusterList },
+        ],
+        stream:          false,
+        response_format: { type: "json_object" },
+        temperature:     0.1,
       }),
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(120_000),
     });
 
-    if (!res.ok) throw new Error(`Ollama ${res.status}`);
+    if (!res.ok) throw new Error(`llama.cpp ${res.status}`);
 
     const data     = await res.json();
-    const parsed   = NamingSchema.parse(JSON.parse(data.response));
+    const parsed   = NamingSchema.parse(JSON.parse(data.choices[0].message.content));
     const titleMap = new Map(parsed.groups.map((g) => [g.index, g.title]));
-    return clusters.map((items, i) => titleMap.get(i) ?? items[0].title.slice(0, 20));
+    return clusters.map((items, i) => titleMap.get(i) ?? fallbackTitle(items));
   } catch {
-    return clusters.map((items) => items[0].title.slice(0, 20));
+    return clusters.map((items) => fallbackTitle(items));
   }
+}
+
+/** LLM失敗時のフォールバック: 複数記事なら共通ワードを抽出、1記事なら先頭を切り取り */
+function fallbackTitle(items: RssFeedItem[]): string {
+  if (items.length <= 1) return items[0].title.slice(0, 30);
+  // 各タイトルを単語に分割し、2記事以上に出現するワードを抽出
+  const tokenSets = items.map((item) =>
+    new Set(item.title.replace(/[「」『』（）\(\)【】]/g, " ").split(/\s+/).filter((w) => w.length >= 2))
+  );
+  const freq = new Map<string, number>();
+  for (const tokens of tokenSets) {
+    for (const t of tokens) freq.set(t, (freq.get(t) ?? 0) + 1);
+  }
+  const common = [...freq.entries()]
+    .filter(([, c]) => c >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([w]) => w);
+  return common.length > 0 ? common.join(" ").slice(0, 30) : items[0].title.slice(0, 30);
 }
 
 /**
@@ -69,7 +95,7 @@ export async function groupArticlesByEvent(
   if (items.length === 0) return [];
 
   const targets = items.slice(0, 30);
-  const vecs    = await embedBatch(targets.map((i) => i.title));
+  const vecs    = await embedBatch(targets.map((i) => i.summary ? `${i.title}\n${i.summary.slice(0, 200)}` : i.title));
 
   // Greedy クラスタリング: 類似度が閾値以上の最近傍クラスタに追加
   type Cluster = { centroid: number[]; items: RssFeedItem[]; vecs: number[][] };
@@ -143,9 +169,9 @@ export async function incrementalGroupArticles(
   });
   if (recent.length === 0) return [];
 
-  // 1. 全記事タイトルをバッチembed + 古いグループ削除（並行）
+  // 1. 全記事タイトル+summaryをバッチembed + 古いグループ削除（並行）
   const [itemVecs] = await Promise.all([
-    embedBatch(recent.map((i) => i.title)),
+    embedBatch(recent.map((i) => i.summary ? `${i.title}\n${i.summary.slice(0, 200)}` : i.title)),
     deleteStaleFeedGroups().catch(() => {}),
   ]);
 

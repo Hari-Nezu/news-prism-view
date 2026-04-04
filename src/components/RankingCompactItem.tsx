@@ -1,7 +1,7 @@
 "use client";
 
 import type { NewsGroup, RssFeedItem } from "@/types";
-import { getSourceColors } from "@/lib/source-colors"; // 記事一覧内で使用
+import { getSourceColors } from "@/lib/source-colors";
 
 interface Props {
   group: NewsGroup;
@@ -19,6 +19,8 @@ export default function RankingCompactItem({
   group, rank, isExpanded, onToggleExpand,
   analyzedUrls, analyzingUrl, onAnalyze, onCompareArticle, style,
 }: Props) {
+  const sources = [...new Set(group.items.map((i) => i.source))];
+
   return (
     <div
       className={`rounded-lg border bg-white overflow-hidden ranking-item ${
@@ -30,14 +32,28 @@ export default function RankingCompactItem({
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
         onClick={onToggleExpand}
       >
-        <span className="text-xs font-bold text-gray-400 w-6 text-right flex-shrink-0">
+        <span className="text-xs font-bold text-gray-400 w-6 text-right flex-shrink-0 tabular-nums">
           {rank}
         </span>
         <span className="flex-1 text-sm font-semibold text-gray-800 truncate">
           {group.groupTitle}
         </span>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-[10px] text-gray-400">{group.items.length}件</span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* 媒体ドット（小） */}
+          <div className="flex items-center gap-0.5">
+            {sources.slice(0, 4).map((s) => (
+              <span
+                key={s}
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: getSourceColors(s).dotColor }}
+                title={s}
+              />
+            ))}
+            {sources.length > 4 && (
+              <span className="text-[9px] text-gray-400 ml-0.5">+{sources.length - 4}</span>
+            )}
+          </div>
+          <span className="text-[10px] text-gray-400 tabular-nums">{group.items.length}件</span>
           <span className="text-gray-300 text-xs">{isExpanded ? "▼" : "▶"}</span>
         </div>
       </button>
@@ -46,7 +62,7 @@ export default function RankingCompactItem({
         <div>
           <div className="border-t border-gray-100 divide-y divide-gray-50">
             {group.items.map((item, i) => (
-              <div key={i} className="px-4 py-2.5 flex items-start gap-3 hover:bg-blue-50 transition-colors">
+              <div key={i} className="px-4 py-2.5 flex items-start gap-3 hover:bg-blue-50/60 transition-colors">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <span className="text-[10px] font-semibold" style={{ color: getSourceColors(item.source).textColor }}>

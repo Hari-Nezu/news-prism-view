@@ -12,11 +12,12 @@ interface Props {
   analyzingUrl?: string;
   onAnalyze: (item: RssFeedItem) => void;
   onCompareArticle?: (item: RssFeedItem) => void;
+  style?: React.CSSProperties;
 }
 
 export default function RankingHeroCard({
   group, totalSourceCount, isExpanded, onToggleExpand,
-  analyzedUrls, analyzingUrl, onAnalyze, onCompareArticle,
+  analyzedUrls, analyzingUrl, onAnalyze, onCompareArticle, style,
 }: Props) {
   const sources = [...new Set(group.items.map((i) => i.source))];
   const coveragePct = totalSourceCount > 0
@@ -24,43 +25,67 @@ export default function RankingHeroCard({
     : 0;
 
   return (
-    <div className="rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-white shadow-lg overflow-hidden ranking-hero">
+    <div
+      className="rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/40 shadow-md overflow-hidden ranking-hero"
+      style={style}
+    >
       <button
-        className="w-full flex items-start gap-3 px-5 py-4 hover:bg-amber-50/60 transition-colors text-left"
+        className="w-full flex items-start gap-4 px-5 py-5 hover:bg-amber-50/40 transition-colors text-left"
         onClick={onToggleExpand}
       >
         {/* ランクバッジ */}
-        <span className="w-9 h-9 rounded-full bg-amber-500 text-white font-black text-base flex items-center justify-center flex-shrink-0 shadow-sm">
-          🥇
+        <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white font-black text-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+          1
         </span>
 
         <div className="flex-1 min-w-0">
-          {/* メタ */}
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-xs font-bold text-amber-700">{group.items.length}件</span>
-            <span className="text-xs text-amber-600">{sources.length}媒体が報道</span>
-          </div>
-
           {/* タイトル */}
           <p className="text-lg font-bold text-gray-900 line-clamp-2 leading-snug mb-3">
             {group.groupTitle}
           </p>
 
+          {/* メタ行 */}
+          <div className="flex items-center gap-3 mb-2.5">
+            <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+              {group.items.length}件
+            </span>
+            <span className="text-xs text-amber-600/80 font-medium">
+              {sources.length}媒体が報道
+            </span>
+          </div>
+
+          {/* 媒体ドット */}
+          <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
+            {sources.map((s) => (
+              <span
+                key={s}
+                className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                style={{
+                  backgroundColor: getSourceColors(s).bgColor,
+                  color: getSourceColors(s).textColor,
+                }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getSourceColors(s).dotColor }} />
+                {s}
+              </span>
+            ))}
+          </div>
+
           {/* カバレッジバー */}
           <div className="flex items-center gap-2">
-            <div className="flex-1 h-2 rounded-full bg-amber-100 overflow-hidden">
+            <div className="flex-1 h-1.5 rounded-full bg-amber-100 overflow-hidden">
               <div
-                className="h-full rounded-full bg-amber-400 transition-all duration-700"
+                className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-400 transition-all duration-700"
                 style={{ width: `${coveragePct}%` }}
               />
             </div>
-            <span className="text-[10px] font-bold text-amber-600 flex-shrink-0">
+            <span className="text-[10px] font-bold text-amber-600/80 flex-shrink-0 tabular-nums">
               {coveragePct}%
             </span>
           </div>
         </div>
 
-        <span className="text-gray-400 text-sm flex-shrink-0 mt-1">
+        <span className="text-gray-300 text-xs flex-shrink-0 mt-2">
           {isExpanded ? "▼" : "▶"}
         </span>
       </button>
@@ -68,9 +93,9 @@ export default function RankingHeroCard({
       {/* 記事一覧 */}
       <div className={`ranking-expand ${isExpanded ? "open" : ""}`}>
         <div>
-          <div className="border-t border-amber-100 divide-y divide-amber-50">
+          <div className="border-t border-amber-100/80 divide-y divide-amber-50/80">
             {group.items.map((item, i) => (
-              <div key={i} className="px-5 py-3 flex items-start gap-3 hover:bg-amber-50 transition-colors">
+              <div key={i} className="px-5 py-3 flex items-start gap-3 hover:bg-amber-50/60 transition-colors">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-[10px] font-semibold" style={{ color: getSourceColors(item.source).textColor }}>

@@ -6,7 +6,7 @@
 #
 # 前提:
 #   - ホストで Ollama が 11434 ポートで起動済み
-#   - 必要なモデルが pull 済み（llama3.2, nomic-embed-text）
+#   - 必要なモデルが pull 済み（llama3.2, ruri-v3-310m）
 services:
   db-migrate:
     build:
@@ -25,9 +25,9 @@ services:
       - "3000:3000"
     environment:
       # host-gateway でホストの Ollama に接続
-      - OLLAMA_BASE_URL=http://host-gateway:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
-      - EMBED_MODEL=${EMBED_MODEL:-nomic-embed-text}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://host-gateway:8080}
+      - LLM_MODEL=${LLM_MODEL:-ggml-org/gemma3:4b}
+      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
       - DATABASE_URL=postgresql://newsprism:newsprism@db:5432/newsprism
       - NEWSDATA_API_KEY=${NEWSDATA_API_KEY:-}
     extra_hosts:

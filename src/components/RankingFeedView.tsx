@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { NewsGroup, RssFeedItem } from "@/types";
+import RankingHeroCard from "./RankingHeroCard";
 import RankingMediumCard from "./RankingMediumCard";
 import RankingCompactItem from "./RankingCompactItem";
 
@@ -16,7 +17,7 @@ interface Props {
 export default function RankingFeedView({
   groups, analyzedUrls, analyzingUrl, onAnalyze, onCompareArticle,
 }: Props) {
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [expanded, setExpanded] = useState<Set<number>>(new Set([0]));
 
   function toggle(i: number) {
     setExpanded((prev) => {
@@ -38,7 +39,12 @@ export default function RankingFeedView({
   const multiOutlet  = sorted.filter((g) => !g.singleOutlet);
   const singleOutlet = sorted.filter((g) =>  g.singleOutlet);
 
-  const cardProps = (globalIndex: number) => ({
+  // 全グループ横断のユニーク媒体数（カバレッジバーの分母）
+  const totalSourceCount = new Set(
+    sorted.flatMap((g) => g.items.map((i) => i.source))
+  ).size;
+
+  const commonProps = (globalIndex: number) => ({
     isExpanded: expanded.has(globalIndex),
     onToggleExpand: () => toggle(globalIndex),
     analyzedUrls,
@@ -50,20 +56,31 @@ export default function RankingFeedView({
 
   return (
     <div className="space-y-3">
-      {multiOutlet.map((g, i) => (
+      {/* #1 はヒーローカード */}
+      {multiOutlet.length > 0 && (
+        <RankingHeroCard
+          group={multiOutlet[0]}
+          totalSourceCount={totalSourceCount}
+          {...commonProps(0)}
+        />
+      )}
+
+      {/* #2~ はミディアムカード */}
+      {multiOutlet.slice(1).map((g, i) => (
         <RankingMediumCard
-          key={i}
+          key={i + 1}
           group={g}
-          rank={i + 1}
-          {...cardProps(i)}
+          rank={i + 2}
+          {...commonProps(i + 1)}
         />
       ))}
 
+      {/* 単独報道セクション */}
       {singleOutlet.length > 0 && (
         <>
-          <div className="flex items-center gap-2 py-1">
+          <div className="flex items-center gap-2 py-1 mt-2">
             <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-[10px] font-medium text-gray-400 px-2">単独報道</span>
+            <span className="text-[10px] font-medium text-gray-400 px-2 tracking-wider">単独報道</span>
             <div className="flex-1 h-px bg-gray-200" />
           </div>
           {singleOutlet.map((g, si) => (
@@ -71,7 +88,7 @@ export default function RankingFeedView({
               key={si}
               group={g}
               rank={multiOutlet.length + si + 1}
-              {...cardProps(multiOutlet.length + si)}
+              {...commonProps(multiOutlet.length + si)}
             />
           ))}
         </>

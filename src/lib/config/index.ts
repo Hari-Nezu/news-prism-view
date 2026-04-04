@@ -6,31 +6,30 @@
  *
  * 設定方法: プロジェクトルートの .env.local に記載する。
  *
- * ── Ollama（ローカルLLMサーバー） ──────────────────────────
+ * ── llama.cpp サーバー ────────────────────────────────────
  *
- * OLLAMA_BASE_URL
- *   OllamaサーバーのベースURL。
- *   デフォルト: http://localhost:11434
+ * LLM_BASE_URL
+ *   llama.cppサーバーのベースURL（OpenAI互換API）。
+ *   デフォルト: http://localhost:8080
  *
- * OLLAMA_MODEL
+ * LLM_MODEL
  *   3軸政治分析（economic/social/diplomatic スコアリング）に使うモデル。
- *   精度が重要なため、思考力の高いモデルを推奨。
- *   デフォルト: gemma3:12b
+ *   llama.cppサーバーにロードされているモデル名を指定。
+ *   デフォルト: ggml-org/gemma3:4b
  *
  * CLASSIFY_MODEL
  *   ニュースカテゴリ分類（8カテゴリ × 34サブカテゴリ）に使うモデル。
- *   分類タスクは軽量なため、小型モデルで十分。
- *   デフォルト: gemma3:4b
+ *   デフォルト: ggml-org/gemma3:4b
  *
  * EMBED_MODEL
  *   テキストのベクトル埋め込みに使うモデル。
- *   記事の類似度計算・グルーピングに使用。出力次元: 768。
- *   デフォルト: nomic-embed-text
+ *   記事の類似度計算・グルーピングに使用。出力次元: 1024。
+ *   デフォルト: Targoyle/ruri-v3
  *
  * MULTI_MODELS
  *   マルチモデル分析モード（/analyze?multiModel=true）で使うモデル一覧。
- *   カンマ区切りで複数指定可能。
- *   デフォルト: gemma3:12b,qwen3.5:4b,llama3.2
+ *   カンマ区切りで複数指定可能。llama.cppは1サーバー1モデルのため通常は1つ。
+ *   デフォルト: ggml-org/gemma3:4b
  *
  * ── 類似度閾値 ─────────────────────────────────────────────
  *
@@ -61,18 +60,18 @@
  *   取得: https://newsdata.io/
  */
 
-// ── Ollama ────────────────────────────────────────────────
-export const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
-export const OLLAMA_MODEL    = process.env.OLLAMA_MODEL    ?? "gemma3:12b";
-export const CLASSIFY_MODEL  = process.env.CLASSIFY_MODEL  ?? "gemma3:4b";
-export const EMBED_MODEL     = process.env.EMBED_MODEL     ?? "nomic-embed-text";
-export const MULTI_MODELS    = (process.env.MULTI_MODELS   ?? "gemma3:12b,qwen3.5:4b,llama3.2")
+// ── llama.cpp ─────────────────────────────────────────────
+export const LLM_BASE_URL    = process.env.LLM_BASE_URL    ?? "http://localhost:8081";
+export const LLM_MODEL       = process.env.LLM_MODEL       ?? "ggml-org/gemma-3-4b-it-GGUF:Q4_K_M";
+export const CLASSIFY_MODEL  = process.env.CLASSIFY_MODEL  ?? "ggml-org/gemma-3-4b-it-GGUF:Q4_K_M";
+export const EMBED_MODEL     = process.env.EMBED_MODEL     ?? "Targoyle/ruri-v3-310m-GGUF:Q8_0";
+export const MULTI_MODELS    = (process.env.MULTI_MODELS   ?? "ggml-org/gemma3:4b")
   .split(",")
   .map((s) => s.trim());
 
 // ── 類似度閾値 ─────────────────────────────────────────────
-export const GROUP_CLUSTER_THRESHOLD   = parseFloat(process.env.GROUP_CLUSTER_THRESHOLD   ?? "0.72");
-export const FEED_GROUP_SIMILARITY_THRESHOLD = parseFloat(process.env.FEED_GROUP_SIMILARITY_THRESHOLD ?? "0.68");
+export const GROUP_CLUSTER_THRESHOLD   = parseFloat(process.env.GROUP_CLUSTER_THRESHOLD   ?? "0.87");
+export const FEED_GROUP_SIMILARITY_THRESHOLD = parseFloat(process.env.FEED_GROUP_SIMILARITY_THRESHOLD ?? "0.87");
 export const EMBED_CLASSIFY_THRESHOLD  = parseFloat(process.env.EMBED_CLASSIFY_THRESHOLD  ?? "0.5");
 
 // ── データベース ───────────────────────────────────────────
@@ -81,3 +80,16 @@ export const DATABASE_URL = process.env.DATABASE_URL
 
 // ── 外部API ───────────────────────────────────────────────
 export const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY ?? null;
+
+// ── ログ出力 ──────────────────────────────────────────────
+if (typeof window === "undefined") {
+  console.log("──────────────────────────────────────────────────");
+  console.log("🚀 NewsPrism Configuration:");
+  console.log(`📡 LLM Base URL:    ${LLM_BASE_URL}`);
+  console.log(`🤖 Analysis Model: ${LLM_MODEL}`);
+  console.log(`🏷️ Classify Model: ${CLASSIFY_MODEL}`);
+  console.log(`📐 Embed    Model: ${EMBED_MODEL}`);
+  console.log(`🔄 Multi Models:    ${MULTI_MODELS.join(", ")}`);
+  console.log(`📏 Group Threshold: ${GROUP_CLUSTER_THRESHOLD}`);
+  console.log("──────────────────────────────────────────────────");
+}

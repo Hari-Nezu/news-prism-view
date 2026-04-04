@@ -1,3 +1,5 @@
+export const maxDuration = 300; // 5分
+
 import { incrementalGroupArticles } from "@/lib/news-grouper";
 import { getRssArticlesSince, deleteStaleRssArticles } from "@/lib/db";
 import type { RssFeedItem } from "@/types";

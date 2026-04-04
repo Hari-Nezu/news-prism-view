@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { AnalysisResult } from "@/types";
-import { OLLAMA_BASE_URL, OLLAMA_MODEL, MULTI_MODELS as DEFAULT_MULTI_MODELS } from "@/lib/config";
+import { LLM_BASE_URL, LLM_MODEL, MULTI_MODELS as DEFAULT_MULTI_MODELS } from "@/lib/config";
 
 const AnalysisSchema = z.object({
   economic: z.number().min(-1).max(1),
@@ -56,9 +56,7 @@ export const MULTI_MODELS = DEFAULT_MULTI_MODELS;
 
 /** モデルの表示ラベル・色 */
 export const MODEL_META: Record<string, { label: string; color: string }> = {
-  "gemma3:12b":  { label: "Gemma 3",   color: "#ef4444" },  // 赤
-  "qwen3.5:4b":  { label: "Qwen 3.5",  color: "#22c55e" },  // 緑
-  "llama3.2":    { label: "Llama 3.2",  color: "#a855f7" },  // 紫
+  "ggml-org/gemma3:4b": { label: "Gemma 3 4B", color: "#ef4444" },
 };
 
 export async function analyzeArticle(
@@ -73,31 +71,30 @@ export async function analyzeArticle(
 本文:
 ${content.slice(0, 3000)}`;
 
-  const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+  const response = await fetch(`${LLM_BASE_URL}/v1/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: model ?? OLLAMA_MODEL,
-      system: SYSTEM_PROMPT,
-      prompt: userPrompt,
+      model: model ?? LLM_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user",   content: userPrompt },
+      ],
       stream: false,
-      format: "json",
-      options: {
-        temperature: 0.1,
-        top_p: 0.9,
-        num_predict: 1024,
-      },
-      think: false,
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+      top_p: 0.9,
+      max_tokens: 1024,
     }),
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Ollama APIエラー: ${response.status} ${text}`);
+    throw new Error(`llama.cpp APIエラー: ${response.status} ${text}`);
   }
 
   const data = await response.json();
-  const raw = JSON.parse(data.response);
+  const raw = JSON.parse(data.choices[0].message.content);
   const parsed = AnalysisSchema.parse(raw);
 
   return {
@@ -129,14 +126,13 @@ export async function* analyzeArticleMultiModel(
       yield { model, result, index: i, total: models.length };
     } catch (err) {
       console.error(`[multiModel] ${model} 分析失敗:`, err);
-      // モデルが使えない場合はスキップ
     }
   }
 }
 
 export async function checkOllamaHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
+    const res = await fetch(`${LLM_BASE_URL}/v1/models`, {
       signal: AbortSignal.timeout(3000),
     });
     return res.ok;

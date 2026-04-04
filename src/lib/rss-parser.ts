@@ -130,8 +130,10 @@ async function fetchFeedByConfig(config: FeedConfig): Promise<RssFeedItem[]> {
       undefined;
 
     // Google News フィードは個々の記事に媒体名が入っている
+    // canonicalSource が設定されている場合は表記揺れを無視して固定名を使う
     const gnSource = extractGnSource(raw.gnSource);
-    const sourceName = isGoogleNews && gnSource ? gnSource : config.name;
+    const sourceName = config.canonicalSource
+      ?? (isGoogleNews && gnSource ? gnSource : config.name);
 
     // Google News タイトルの " - 媒体名" を除去
     const rawTitle = item.title ?? "タイトル不明";
@@ -151,8 +153,8 @@ async function fetchFeedByConfig(config: FeedConfig): Promise<RssFeedItem[]> {
   });
 
   const filtered = !config.filterPolitical
-    ? rawItems.slice(0, 15)
-    : rawItems.filter((item) => isPolitical(item.title, item.summary)).slice(0, 10);
+    ? rawItems.slice(0, 30)
+    : rawItems.filter((item) => isPolitical(item.title, item.summary)).slice(0, 20);
 
   // 分類はfetchAllDefaultFeeds側でまとめて実施するため、ここではtopic未設定で返す
   return filtered as RssFeedItem[];

@@ -13,16 +13,32 @@ export interface SourceColors {
 
 // 主要媒体の固定カラー
 const KNOWN_SOURCES: Record<string, SourceColors> = {
+  // ── NHK カテゴリ別 ──
+  "NHK":                { bgColor: "#fef2f2", textColor: "#dc2626", dotColor: "#ef4444", borderColor: "#fecaca" },
   "NHK政治":            { bgColor: "#fef2f2", textColor: "#dc2626", dotColor: "#ef4444", borderColor: "#fecaca" },
   "NHK国際":            { bgColor: "#fff7ed", textColor: "#ea580c", dotColor: "#f97316", borderColor: "#fed7aa" },
   "NHK経済":            { bgColor: "#fefce8", textColor: "#a16207", dotColor: "#ca8a04", borderColor: "#fef08a" },
   "NHK社会":            { bgColor: "#fdf4ff", textColor: "#9333ea", dotColor: "#a855f7", borderColor: "#e9d5ff" },
+  // ── 新聞 ──
   "朝日新聞":            { bgColor: "#eff6ff", textColor: "#1d4ed8", dotColor: "#3b82f6", borderColor: "#bfdbfe" },
+  "毎日新聞":            { bgColor: "#f5f3ff", textColor: "#6d28d9", dotColor: "#7c3aed", borderColor: "#ddd6fe" },
+  "読売新聞":            { bgColor: "#f0fdf4", textColor: "#166534", dotColor: "#16a34a", borderColor: "#bbf7d0" },
+  "日本経済新聞":        { bgColor: "#fef9c3", textColor: "#92400e", dotColor: "#d97706", borderColor: "#fde68a" },
   "産経新聞":            { bgColor: "#fff1f2", textColor: "#be123c", dotColor: "#f43f5e", borderColor: "#fecdd3" },
+  "東京新聞":            { bgColor: "#f0f9ff", textColor: "#075985", dotColor: "#0284c7", borderColor: "#bae6fd" },
+  // ── 通信社 ──
+  "時事通信":            { bgColor: "#f8fafc", textColor: "#334155", dotColor: "#64748b", borderColor: "#cbd5e1" },
+  "共同通信":            { bgColor: "#f1f5f9", textColor: "#475569", dotColor: "#94a3b8", borderColor: "#e2e8f0" },
+  // ── テレビ ──
+  "TBSニュース":         { bgColor: "#f0f9ff", textColor: "#0369a1", dotColor: "#0ea5e9", borderColor: "#bae6fd" },
+  "テレビ朝日":          { bgColor: "#fdf2f8", textColor: "#be185d", dotColor: "#ec4899", borderColor: "#fbcfe8" },
+  "日本テレビ":          { bgColor: "#f5f3ff", textColor: "#5b21b6", dotColor: "#7c3aed", borderColor: "#ddd6fe" },
+  "フジテレビ":          { bgColor: "#fff7ed", textColor: "#c2410c", dotColor: "#fb923c", borderColor: "#fed7aa" },
+  // ── Webメディア ──
   "東洋経済オンライン":  { bgColor: "#f0fdf4", textColor: "#15803d", dotColor: "#22c55e", borderColor: "#bbf7d0" },
-  "ロイター日本語":      { bgColor: "#fff7ed", textColor: "#c2410c", dotColor: "#fb923c", borderColor: "#fed7aa" },
   "ハフポスト日本版":    { bgColor: "#ecfdf5", textColor: "#065f46", dotColor: "#10b981", borderColor: "#a7f3d0" },
-  "日経新聞":            { bgColor: "#fef9c3", textColor: "#92400e", dotColor: "#d97706", borderColor: "#fde68a" },
+  // ── 海外 ──
+  "ロイター日本語":      { bgColor: "#fff7ed", textColor: "#c2410c", dotColor: "#fb923c", borderColor: "#fed7aa" },
 };
 
 // 前方一致マッピング（"NHK" で始まる未知ソース等に対応）

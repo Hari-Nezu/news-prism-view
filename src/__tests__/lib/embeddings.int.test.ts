@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { embedBatch, embed } from "@/lib/embeddings";
-import { OLLAMA_BASE_URL, EMBED_MODEL } from "@/lib/config";
+import { LLM_BASE_URL, EMBED_MODEL } from "@/lib/config";
 
 /**
  * 実際の Ollama API を呼び出して検証する統合テスト
@@ -8,19 +8,19 @@ import { OLLAMA_BASE_URL, EMBED_MODEL } from "@/lib/config";
  * 実行方法:
  *   npx vitest src/__tests__/lib/embeddings.int.ts
  */
-describe("embeddings integration (Ollama)", () => {
+describe("embeddings integration (llama.cpp)", () => {
   const isIntegration = !!process.env.INTEGRATION;
 
   beforeAll(async () => {
     if (!isIntegration) return;
     // Ollama が起動しているか軽くチェック
     try {
-      const res = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
+      const res = await fetch(`${LLM_BASE_URL}/v1/models`);
       if (!res.ok) throw new Error();
     } catch {
-      console.warn("⚠️  Ollama is not running. Integration tests might fail.");
+      console.warn("⚠️  llama.cpp is not running. Integration tests might fail.");
     }
-    console.log(`Using model: ${EMBED_MODEL} at ${OLLAMA_BASE_URL}`);
+    console.log(`Using model: ${EMBED_MODEL} at ${LLM_BASE_URL}`);
   });
 
   describe("embed", () => {
