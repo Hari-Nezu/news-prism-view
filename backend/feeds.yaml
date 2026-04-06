@@ -5,70 +5,70 @@ feeds:
     type: google-news
     category: 政治
     filter_political: false
-    default_enabled: true
+    default_enabled: false
   - id: gnews-economy
     name: "Google News 経済"
     url: "https://news.google.com/rss/search?q=%E6%97%A5%E6%9C%AC+%E7%B5%8C%E6%B8%88+OR+%E8%B2%A1%E6%94%BF+OR+%E6%97%A5%E9%8A%80&hl=ja&gl=JP&ceid=JP:ja"
     type: google-news
     category: 経済
     filter_political: false
-    default_enabled: true
+    default_enabled: false
   - id: gnews-world
     name: "Google News 国際"
     url: "https://news.google.com/rss/search?q=%E5%A4%96%E4%BA%A4+OR+%E9%98%B2%E8%A1%9B+OR+%E5%9B%BD%E9%9A%9B%E6%83%85%E5%8B%A2&hl=ja&gl=JP&ceid=JP:ja"
     type: google-news
     category: 国際
     filter_political: false
-    default_enabled: true
+    default_enabled: false
   - id: nhk
     name: "NHK"
     url: "https://www.nhk.or.jp/rss/news/cat0.xml"
     type: rss
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
   - id: asahi
     name: "朝日新聞"
     url: "https://www.asahi.com/rss/asahi/newsheadlines.rdf"
     type: rss
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
   - id: mainichi
     name: "毎日新聞"
     url: "https://mainichi.jp/rss/etc/mainichi-flash.rss"
     type: rss
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
   - id: sankei
     name: "産経新聞"
     url: "https://www.sankei.com/rss/news/flash.xml"
     type: rss
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
   - id: toyokeizai
     name: "東洋経済オンライン"
     url: "https://toyokeizai.net/list/feed/rss"
     type: rss
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
   - id: huffpost-jp
     name: "ハフポスト日本版"
     url: "https://www.huffingtonpost.jp/feeds/index.xml"
     type: rss
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
   - id: yomiuri
     name: "読売新聞"
     url: "https://news.google.com/rss/search?q=site:yomiuri.co.jp&hl=ja&gl=JP&ceid=JP:ja"
     type: google-news
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
     canonical_source: "読売新聞"
   - id: nikkei
     name: "日本経済新聞"
@@ -76,7 +76,7 @@ feeds:
     type: google-news
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
     canonical_source: "日本経済新聞"
   - id: tokyo-np
     name: "東京新聞"
@@ -84,7 +84,7 @@ feeds:
     type: google-news
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
     canonical_source: "東京新聞"
   - id: jiji
     name: "時事通信"
@@ -92,7 +92,7 @@ feeds:
     type: google-news
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
     canonical_source: "時事通信"
   - id: kyodo
     name: "共同通信"
@@ -100,7 +100,7 @@ feeds:
     type: google-news
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
     canonical_source: "共同通信"
   - id: tbs-news
     name: "TBSニュース"
@@ -108,7 +108,7 @@ feeds:
     type: google-news
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
     canonical_source: "TBSニュース"
   - id: tv-asahi
     name: "テレビ朝日"
@@ -116,7 +116,7 @@ feeds:
     type: google-news
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
     canonical_source: "テレビ朝日"
   - id: ntv
     name: "日本テレビ"
@@ -124,7 +124,7 @@ feeds:
     type: google-news
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
     canonical_source: "日本テレビ"
   - id: fnn
     name: "フジテレビ"
@@ -132,5 +132,5 @@ feeds:
     type: google-news
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
     canonical_source: "フジテレビ"
