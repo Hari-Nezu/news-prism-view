@@ -379,13 +379,20 @@ export async function upsertRssArticles(items: RssFeedItem[]): Promise<void> {
 }
 
 /** 指定日時以降に fetchedAt された記事を取得 */
-export async function getRssArticlesSince(since: Date): Promise<RssFeedItem[]> {
+export async function getRssArticlesSince(since: Date, sources?: string[]): Promise<RssFeedItem[]> {
+  const hasSources = sources && sources.length > 0;
+  const sql = hasSources
+    ? `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
+       FROM "RssArticle"
+       WHERE "fetchedAt" >= $1 AND source = ANY($2)
+       ORDER BY "publishedAt" DESC NULLS LAST`
+    : `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
+       FROM "RssArticle"
+       WHERE "fetchedAt" >= $1
+       ORDER BY "publishedAt" DESC NULLS LAST`;
   const rows = await getPrisma().$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
-     FROM "RssArticle"
-     WHERE "fetchedAt" >= $1
-     ORDER BY "publishedAt" DESC NULLS LAST`,
-    since,
+    sql,
+    ...(hasSources ? [since, sources] : [since]),
   );
   return rows.map((r) => ({
     url:         String(r.url),
@@ -400,14 +407,20 @@ export async function getRssArticlesSince(since: Date): Promise<RssFeedItem[]> {
 }
 
 /** 指定期間内（since〜until）に publishedAt がある記事を取得 */
-export async function getRssArticlesBetween(since: Date, until: Date): Promise<RssFeedItem[]> {
+export async function getRssArticlesBetween(since: Date, until: Date, sources?: string[]): Promise<RssFeedItem[]> {
+  const hasSources = sources && sources.length > 0;
+  const sql = hasSources
+    ? `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
+       FROM "RssArticle"
+       WHERE "publishedAt" >= $1 AND "publishedAt" <= $2 AND source = ANY($3)
+       ORDER BY "publishedAt" DESC NULLS LAST`
+    : `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
+       FROM "RssArticle"
+       WHERE "publishedAt" >= $1 AND "publishedAt" <= $2
+       ORDER BY "publishedAt" DESC NULLS LAST`;
   const rows = await getPrisma().$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
-     FROM "RssArticle"
-     WHERE "publishedAt" >= $1 AND "publishedAt" <= $2
-     ORDER BY "publishedAt" DESC NULLS LAST`,
-    since,
-    until,
+    sql,
+    ...(hasSources ? [since, until, sources] : [since, until]),
   );
   return rows.map((r) => ({
     url:         String(r.url),
@@ -475,6 +488,42 @@ export async function saveYouTubeVideo(
   }
 
   return saved.id;
+}
+
+/** RssArticle の embedding を一括更新（url をキーに） */
+export async function saveRssArticleEmbeddings(
+  entries: { url: string; vec: number[] }[]
+): Promise<void> {
+  if (entries.length === 0) return;
+  const prisma = getPrisma();
+  await Promise.all(
+    entries.map(({ url, vec }) =>
+      prisma.$executeRawUnsafe(
+        `UPDATE "RssArticle" SET embedding = $1::vector WHERE url = $2`,
+        `[${vec.join(",")}]`,
+        url,
+      ).catch(() => {})
+    )
+  );
+}
+
+/** 指定URLの embedding を取得して Map<url, number[]> で返す */
+export async function getRssArticleEmbeddingMap(
+  urls: string[]
+): Promise<Map<string, number[]>> {
+  if (urls.length === 0) return new Map();
+  const rows = await getPrisma().$queryRawUnsafe<Array<{ url: string; embedding_str: string }>>(
+    `SELECT url, embedding::text AS embedding_str
+     FROM "RssArticle"
+     WHERE url = ANY($1) AND embedding IS NOT NULL`,
+    urls,
+  );
+  const map = new Map<string, number[]>();
+  for (const r of rows) {
+    const vec = parseVectorString(r.embedding_str);
+    if (vec) map.set(r.url, vec);
+  }
+  return map;
 }
 
 // ── ヘルパー ────────────────────────────────────────────

@@ -7,6 +7,7 @@ import {
   updateFeedGroupCentroid,
   upsertFeedGroupItems,
   deleteStaleFeedGroups,
+  getRssArticleEmbeddingMap,
   type FeedGroupRecord,
 } from "@/lib/db";
 
@@ -213,19 +214,53 @@ export async function incrementalGroupArticles(
   });
   if (recent.length === 0) return [];
 
-  // 1. 全記事タイトル+summaryをバッチembed + 古いグループ削除（並行）
-  const [itemVecs] = await Promise.all([
-    embedBatch(recent.map((i) => i.summary ? `${i.title}\n${i.summary.slice(0, 200)}` : i.title)),
-    deleteStaleFeedGroups().catch(() => {}),
-  ]);
+  // 1. DB から既存 embedding を取得
+  const storedMap = await getRssArticleEmbeddingMap(
+    recent.filter((i) => i.url).map((i) => i.url!)
+  );
 
-  // 2. アクティブなFeedGroupをDBから取得（テーブル未作成時は空配列にフォールバック）
-  const existingGroups = await getActiveFeedGroups().catch((err) => {
-    console.warn("[incrementalGroup] FeedGroup取得失敗（prisma db push が必要な可能性）:", err?.message);
-    return [];
+  // 2. embedding がない記事のみ embedBatch
+  const needEmbed = recent.filter((i) => !i.url || !storedMap.has(i.url));
+  let newVecs: (number[] | null)[] = [];
+  if (needEmbed.length > 0) {
+    newVecs = await embedBatch(
+      needEmbed.map((i) => i.summary ? `${i.title}\n${i.summary.slice(0, 200)}` : i.title)
+    );
+  }
+  let needEmbedIdx = 0;
+
+  // 3. 全記事の embedding を itemVecs に揃える
+  const itemVecs: (number[] | null)[] = recent.map((item) => {
+    if (item.url && storedMap.has(item.url)) return storedMap.get(item.url)!;
+    const vec = newVecs[needEmbedIdx++] ?? null;
+    return vec;
   });
 
-  // 3. 各記事を既存グループにマッチ or 未マッチに振り分け
+  // 4. 重複除去（cosine類似度 > 0.95 の記事は後者を除外）
+  const DEDUP_THRESHOLD = 0.95;
+  const dedupedRecent: RssFeedItem[] = [];
+  const dedupedVecs:   (number[] | null)[] = [];
+  for (let i = 0; i < recent.length; i++) {
+    const vec = itemVecs[i];
+    if (!vec) { dedupedRecent.push(recent[i]); dedupedVecs.push(null); continue; }
+    let isDup = false;
+    for (let j = 0; j < dedupedVecs.length; j++) {
+      const dv = dedupedVecs[j];
+      if (dv && cosineSimilarity(vec, dv) > DEDUP_THRESHOLD) { isDup = true; break; }
+    }
+    if (!isDup) { dedupedRecent.push(recent[i]); dedupedVecs.push(vec); }
+  }
+
+  // 5. 古いグループ削除 & アクティブなFeedGroupをDBから取得（並行）
+  const [, existingGroups] = await Promise.all([
+    deleteStaleFeedGroups().catch(() => {}),
+    getActiveFeedGroups().catch((err) => {
+      console.warn("[incrementalGroup] FeedGroup取得失敗:", err?.message);
+      return [] as FeedGroupRecord[];
+    }),
+  ]);
+
+  // 6. 各記事を既存グループにマッチ or 未マッチに振り分け
   const unmatched:     RssFeedItem[]       = [];
   const unmatchedVecs: (number[] | null)[] = [];
   const assignments    = new Map<string, {
@@ -234,9 +269,9 @@ export async function incrementalGroupArticles(
     vecs:  number[][];
   }>();
 
-  for (let i = 0; i < recent.length; i++) {
-    const item = recent[i];
-    const vec  = itemVecs[i];
+  for (let i = 0; i < dedupedRecent.length; i++) {
+    const item = dedupedRecent[i];
+    const vec  = dedupedVecs[i];
 
     if (!vec || existingGroups.length === 0) {
       unmatched.push(item);
@@ -266,7 +301,7 @@ export async function incrementalGroupArticles(
     }
   }
 
-  // 4. マッチしたグループのcentroid更新 & FeedGroupItem保存
+  // 7. マッチしたグループのcentroid更新 & FeedGroupItem保存
   const matchedGroups: NewsGroup[] = [];
   for (const [groupId, { group, items: assigned, vecs }] of assignments) {
     const newCentroid = computeNewCentroid(group.embedding, group.articleCount, vecs);
@@ -284,7 +319,7 @@ export async function incrementalGroupArticles(
     });
   }
 
-  // 5. 未マッチ記事をOllamaで新規グループ化
+  // 8. 未マッチ記事をOllamaで新規グループ化
   let newGroups: NewsGroup[] = [];
   if (unmatched.length > 0) {
     newGroups = await groupArticlesByEvent(unmatched);

@@ -8,8 +8,10 @@ const WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
 export async function POST(request: Request) {
   try {
-    const body: { items?: RssFeedItem[]; targetDate?: string } = await request.json();
-    const { items, targetDate } = body;
+    const body: { items?: RssFeedItem[]; targetDate?: string; enabledSources?: string[] | null } = await request.json();
+    const { items, targetDate, enabledSources } = body;
+    // null または未指定はフィルタなし、空配列も同様
+    const sources = enabledSources && enabledSources.length > 0 ? enabledSources : undefined;
 
     let merged: RssFeedItem[];
 
@@ -18,11 +20,11 @@ export async function POST(request: Request) {
       const until = new Date(targetDate);
       until.setHours(23, 59, 59, 999); // 当日末尾まで含む
       const since = new Date(until.getTime() - WINDOW_MS);
-      merged = await getRssArticlesBetween(since, until).catch(() => [] as RssFeedItem[]);
+      merged = await getRssArticlesBetween(since, until, sources).catch(() => [] as RssFeedItem[]);
     } else {
       // 通常モード: 現在時刻から過去3日 + フレッシュ記事をマージ
       const since = new Date(Date.now() - WINDOW_MS);
-      const dbItems = await getRssArticlesSince(since).catch(() => [] as RssFeedItem[]);
+      const dbItems = await getRssArticlesSince(since, sources).catch(() => [] as RssFeedItem[]);
 
       const seen = new Set<string>();
       merged = [];

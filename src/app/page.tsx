@@ -251,6 +251,13 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
+              href="/ranking"
+              className="text-xs font-semibold text-amber-600 hover:text-amber-800 transition-colors whitespace-nowrap"
+            >
+              <span className="sm:hidden">🏆</span>
+              <span className="hidden sm:inline">🏆 まとめ</span>
+            </Link>
+            <Link
               href="/youtube"
               className="text-xs font-semibold text-red-600 hover:text-red-800 transition-colors whitespace-nowrap"
             >

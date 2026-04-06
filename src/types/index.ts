@@ -51,9 +51,6 @@ export interface NewsGroup {
   subcategory?: string;      // グループ内の支配的中分類
 }
 
-/** ニュースフィードのグループ表示モード */
-export type GroupMode = "off" | "ranking";
-
 // ── マルチモデル分析 ─────────────────────────────────
 
 /** 単一モデルの分析結果（モデル名付き） */

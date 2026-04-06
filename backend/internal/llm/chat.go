@@ -1,0 +1,74 @@
+package llm
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+)
+
+type ChatClient struct {
+	BaseURL string
+	Model   string
+	client  *http.Client
+}
+
+func NewChatClient(baseURL, model string) *ChatClient {
+	return &ChatClient{
+		BaseURL: baseURL,
+		Model:   model,
+		client:  &http.Client{Timeout: 180 * time.Second},
+	}
+}
+
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// Complete sends a chat completion request and returns the assistant message content.
+func (c *ChatClient) Complete(ctx context.Context, system, user string) (string, error) {
+	body, _ := json.Marshal(map[string]any{
+		"model": c.Model,
+		"messages": []Message{
+			{Role: "system", Content: system},
+			{Role: "user", Content: user},
+		},
+		"stream":          false,
+		"response_format": map[string]string{"type": "json_object"},
+		"temperature":     0.1,
+	})
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("chat request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("chat HTTP %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	if len(result.Choices) == 0 {
+		return "", fmt.Errorf("no choices in response")
+	}
+	return result.Choices[0].Message.Content, nil
+}

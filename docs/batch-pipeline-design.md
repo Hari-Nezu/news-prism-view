@@ -1,4 +1,4 @@
-# バッチパイプライン設計
+# バッチパイプライン設計（Go 実装）
 
 ## 背景・動機
 
@@ -9,345 +9,395 @@
 - 同じ記事を何度も再処理する無駄
 - LLM/embeddingサーバーの負荷が閲覧数に比例
 - ユーザー体験: 待ち時間が長い
+- 今後のニュース対象量増加に Node.js の並行処理だと厳しい
 
 **目指す姿:**
-- 定時バッチで収集・処理を完了し、DBに結果を格納
+- Go バイナリで定時バッチ処理。goroutine で並行フィード取得・embedding
 - UIはDBから読むだけ → 即時表示
+- Next.js はフロントエンド + 読み取りAPIのみに限定
+
+---
+
+## アーキテクチャ
+
+```
+┌──────────────────────────────────────────────┐
+│  newsprism-batch (Go バイナリ)                 │
+│                                              │
+│  サブコマンド:                                 │
+│    run      — パイプライン1回実行              │
+│    serve    — HTTP + 内蔵cron スケジューラ     │
+│                                              │
+│  ┌─────────────────────────────────────────┐ │
+│  │ collect → embed → classify → group →    │ │
+│  │   name → dedup → store                  │ │
+│  └─────────────────────────────────────────┘ │
+└──────────────────────┬───────────────────────┘
+                       │ pgx
+           ┌───────────▼────────────┐
+           │ PostgreSQL + pgvector  │
+           └───────────▲────────────┘
+                       │ Prisma（読み取りのみ）
+┌──────────────────────┴───────────────────────┐
+│  Next.js (フロントエンド)                      │
+│    GET /api/batch/latest  — スナップショット取得│
+│    GET /api/batch/history — 履歴一覧           │
+│    既存の /api/analyze 等 — オンデマンド分析    │
+└──────────────────────────────────────────────┘
+
+           ┌───────────────────────┐
+           │ llama.cpp サーバー     │
+           │  :8081                │
+           │  - embedding (ruri)   │
+           │  - chat (gemma)       │
+           └───────────────────────┘
+```
+
+---
+
+## Go 技術スタック
+
+| 用途 | ライブラリ | 理由 |
+|------|-----------|------|
+| HTTP | `net/http` + `go-chi/chi/v5` | 軽量、stdlib準拠 |
+| DB | `jackc/pgx/v5` | PostgreSQL最速ドライバ |
+| pgvector | `pgvector/pgvector-go` | `pgx` 統合済み |
+| RSS | `mmcdole/gofeed` | 最も成熟した Go RSS パーサー |
+| cron | `robfig/cron/v3` | `serve` モード用の内蔵スケジューラ |
+| CLI | `spf13/cobra` or 標準 `flag` | サブコマンド管理 |
+| 設定 | 環境変数 + YAML | フィード定義は YAML 共有ファイル |
+| ログ | `log/slog` | Go 1.21+ 標準の構造化ログ |
+
+---
+
+## ディレクトリ構成
+
+```
+backend/
+├── cmd/
+│   └── newsprism-batch/
+│       └── main.go              — エントリポイント（run / serve サブコマンド）
+├── internal/
+│   ├── config/
+│   │   ├── config.go            — 環境変数読み込み
+│   │   └── feeds.go             — フィード定義の読み込み（YAML）
+│   ├── db/
+│   │   ├── pool.go              — pgx コネクションプール初期化
+│   │   ├── articles.go          — RssArticle CRUD
+│   │   ├── snapshots.go         — ProcessedSnapshot CRUD
+│   │   └── lock.go              — PostgreSQL advisory lock
+│   ├── pipeline/
+│   │   ├── pipeline.go          — オーケストレータ
+│   │   ├── collect.go           — RSS 収集
+│   │   ├── embed.go             — バッチ embedding
+│   │   ├── classify.go          — LLM 分類（embedding → LLM カスケード）
+│   │   ├── group.go             — グリーディクラスタリング
+│   │   ├── name.go              — LLM グループ命名
+│   │   ├── dedup.go             — embedding 類似度重複除去
+│   │   └── store.go             — スナップショット保存
+│   ├── llm/
+│   │   ├── client.go            — llama.cpp OpenAI互換 HTTP クライアント
+│   │   ├── embed.go             — /v1/embeddings ラッパー
+│   │   └── chat.go              — /v1/chat/completions ラッパー
+│   └── rss/
+│       ├── parser.go            — gofeed ラッパー + Google News 対応
+│       └── filter.go            — 政治・経済フィルタ
+├── feeds.yaml                   — フィード定義（TypeScript 版と同期）
+├── go.mod
+└── go.sum
+```
 
 ---
 
 ## パイプライン概要
 
 ```
-[cron: 毎時] → collect → embed → classify → group → name → store
-                 ↓                                        ↓
-              RssArticle                            ProcessedSnapshot
-                                                   ├─ SnapshotGroup
-                                                   └─ SnapshotGroupItem
+[cron / CLI] → collect → embed → classify → group → name → dedup → store
+                 ↓                                                   ↓
+              RssArticle                                       ProcessedSnapshot
+              (embedding保存)                                  ├─ SnapshotGroup
+                                                               └─ SnapshotGroupItem
 ```
 
 ### ステージ
 
-| # | ステージ | 処理内容 | 依存 | 推定時間 |
-|---|---------|---------|------|---------|
-| 1 | **collect** | 15社+デフォルトフィードのRSS取得、RssArticle upsert | なし | ~30s |
-| 2 | **embed** | 新規記事（embedding未計算）のバッチembedding | llama.cpp | ~20s/100件 |
-| 3 | **classify** | 新規記事のtopic/subcategory分類 | llama.cpp | ~30s/100件 |
-| 4 | **group** | embedding類似度によるグリーディクラスタリング | embed完了 | ~5s |
-| 5 | **name** | LLMによるグループ命名 | group完了 | ~10s |
-| 6 | **store** | スナップショットとしてDBに保存 | name完了 | ~2s |
+| # | ステージ | 処理内容 | Go の並行性 | 推定時間 |
+|---|---------|---------|-----------|---------|
+| 1 | **collect** | 全フィード RSS 並行取得、RssArticle upsert | goroutine × フィード数 | ~5s |
+| 2 | **embed** | embedding 未計算記事のバッチ embedding | バッチAPI 1回（llama.cpp が並行処理） | ~20s/100件 |
+| 3 | **classify** | category/subcategory 未分類記事の分類 | embedding分類は Go 内で完結、LLM フォールバックのみ API | ~30s/100件 |
+| 4 | **group** | embedding コサイン類似度クラスタリング | Go 内で完結（CPU） | ~1s |
+| 5 | **name** | LLM グループ命名 | 1回の API 呼び出し | ~10s |
+| 6 | **dedup** | cosine > 0.95 の重複記事を除去 | Go 内で完結（CPU） | <1s |
+| 7 | **store** | スナップショット保存 + 古いスナップショット削除 | トランザクション 1回 | ~2s |
 
-合計: 1回あたり約2分（記事100件想定）
+合計: 1回あたり約1分（記事100件想定、collect の goroutine 並行で短縮）
 
 ---
 
-## DBスキーマ変更
+## フィード定義の共有
 
-### RssArticle 拡張
+TypeScript の `feed-configs.ts` と Go の `feeds.yaml` を二重管理しないために YAML を正とする。
 
-```prisma
-model RssArticle {
-  // ... 既存フィールド ...
+```yaml
+# backend/feeds.yaml
+feeds:
+  - id: gnews-politics
+    name: Google News 政治
+    url: "https://news.google.com/rss/search?q=..."
+    type: google-news
+    category: 政治
+    filter_political: false
+    default_enabled: true
 
-  // バッチ処理で付与
-  embedding    Unsupported("vector(1024)")?
-  classifiedAt DateTime?   // classify済みフラグ
-  embeddedAt   DateTime?   // embed済みフラグ
-}
+  - id: nhk
+    name: NHK
+    url: "https://www.nhk.or.jp/rss/news/cat0.xml"
+    type: rss
+    category: 総合
+    filter_political: false
+    default_enabled: false
+
+  - id: yomiuri
+    name: 読売新聞
+    url: "https://news.google.com/rss/search?q=site:yomiuri.co.jp..."
+    type: google-news
+    category: 総合
+    filter_political: false
+    default_enabled: false
+    canonical_source: 読売新聞
+
+  # ... 他のフィードも同様
 ```
 
-現在のRssArticleにはembeddingがない。バッチでembeddingを計算し格納することで、グループ化時の再計算を不要にする。
+Next.js 側の `feed-configs.ts` は YAML から自動生成するスクリプトを用意する（or フロント用は YAML を直接 fetch）。
+
+---
+
+## DBスキーマ
+
+### RssArticle 拡張（既存 + 追加カラム）
+
+既に `embedding vector(1024)` は追加済み。バッチ処理で以下を追加:
+
+```sql
+ALTER TABLE "RssArticle" ADD COLUMN IF NOT EXISTS "embeddedAt" TIMESTAMPTZ;
+ALTER TABLE "RssArticle" ADD COLUMN IF NOT EXISTS "classifiedAt" TIMESTAMPTZ;
+```
+
+- `embeddedAt IS NULL` → embed 対象
+- `classifiedAt IS NULL` → classify 対象
 
 ### 新テーブル: ProcessedSnapshot
 
-バッチ実行ごとの「スナップショット」を保存。UIはこれを読む。
+```sql
+CREATE TABLE "ProcessedSnapshot" (
+  id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "processedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "articleCount" INT NOT NULL,
+  "groupCount"   INT NOT NULL,
+  "durationMs"   INT NOT NULL,
+  status         TEXT NOT NULL,  -- 'success' | 'partial' | 'failed'
+  error          TEXT
+);
+CREATE INDEX idx_snapshot_processed ON "ProcessedSnapshot" ("processedAt" DESC);
 
-```prisma
-/// バッチ処理の実行記録 + 結果スナップショット
-model ProcessedSnapshot {
-  id          String   @id @default(cuid())
-  processedAt DateTime @default(now())
-  articleCount Int             // 処理対象記事数
-  groupCount   Int             // 生成グループ数
-  durationMs   Int             // パイプライン実行時間
-  status       String          // "success" | "partial" | "failed"
-  error        String?
+CREATE TABLE "SnapshotGroup" (
+  id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "snapshotId"  TEXT NOT NULL REFERENCES "ProcessedSnapshot"(id) ON DELETE CASCADE,
+  "groupTitle"  TEXT NOT NULL,
+  category      TEXT,
+  subcategory   TEXT,
+  rank          INT NOT NULL,
+  "singleOutlet" BOOLEAN NOT NULL,
+  "coveredBy"   JSONB,   -- string[]
+  "silentMedia" JSONB    -- string[]
+);
+CREATE INDEX idx_sg_snapshot ON "SnapshotGroup" ("snapshotId");
 
-  groups      SnapshotGroup[]
-
-  @@index([processedAt(sort: Desc)])
-}
-
-/// スナップショット内のニュースグループ
-model SnapshotGroup {
-  id           String   @id @default(cuid())
-  snapshot     ProcessedSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
-  snapshotId   String
-
-  groupTitle   String
-  topic        String
-  rank         Int              // 表示順位
-  singleOutlet Boolean
-  coveredBy    Json             // string[] — 報じた媒体名
-  silentMedia  Json             // string[] — 報じなかった媒体名
-
-  items        SnapshotGroupItem[]
-
-  @@index([snapshotId])
-}
-
-/// スナップショットグループ内の記事
-model SnapshotGroupItem {
-  id          String   @id @default(cuid())
-  group       SnapshotGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  groupId     String
-
-  title       String
-  url         String
-  source      String
-  summary     String?
-  publishedAt String?
-  topic       String?
-  subcategory String?
-
-  @@index([groupId])
-}
+CREATE TABLE "SnapshotGroupItem" (
+  id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "groupId"   TEXT NOT NULL REFERENCES "SnapshotGroup"(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  url         TEXT NOT NULL,
+  source      TEXT NOT NULL,
+  summary     TEXT,
+  "publishedAt" TEXT,
+  category    TEXT,
+  subcategory TEXT
+);
+CREATE INDEX idx_sgi_group ON "SnapshotGroupItem" ("groupId");
 ```
+
+**注意**: Prisma スキーマにも追加し `prisma generate` を実行する（Next.js 読み取り用）。
+ただし Go は Prisma を使わず `pgx` で直接操作する。
 
 ---
 
-## 実行トリガー
+## 排他制御
 
-### 選択肢と推奨
+Go から PostgreSQL advisory lock を使用。テーブル不要、プロセスクラッシュ時に自動解放:
 
-| 方式 | メリット | デメリット |
-|------|---------|----------|
-| **システムcron + curl** | シンプル、確実 | サーバー外部に依存 |
-| Next.js Route + 外部cron | Next.jsに閉じる | Vercel等PaaSならcron設定が必要 |
-| node-cron (プロセス内) | 追加インフラ不要 | Next.js dev serverでは不安定 |
+```go
+// db/lock.go
+func AcquirePipelineLock(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
+    const lockID = 123456789 // 固定のアプリケーション固有ID
+    var acquired bool
+    err := pool.QueryRow(ctx,
+        "SELECT pg_try_advisory_lock($1)", lockID,
+    ).Scan(&acquired)
+    return acquired, err
+}
 
-**推奨: Next.js API Route + システムcron（macOS launchd / Linux crontab）**
-
+func ReleasePipelineLock(ctx context.Context, pool *pgxpool.Pool) error {
+    const lockID = 123456789
+    _, err := pool.Exec(ctx, "SELECT pg_advisory_unlock($1)", lockID)
+    return err
+}
 ```
+
+BatchLock テーブルは不要。advisory lock はセッション終了（DB接続切断）で自動解放されるため、
+プロセスがクラッシュしてもロックが残らない。
+
+---
+
+## 実行モード
+
+### `newsprism-batch run`
+
+パイプラインを1回実行して終了。crontab から呼ぶ場合に使用:
+
+```bash
 # crontab -e
-0 * * * * curl -s http://localhost:3000/api/batch/run > /dev/null 2>&1
+0 * * * * /usr/local/bin/newsprism-batch run 2>&1 | logger -t newsprism
 ```
 
-理由:
-- ローカル開発環境（llama.cpp もローカル）前提
-- API Route内にパイプラインロジックを置けばテスト・手動実行が容易
-- プロセス外cronなのでNext.js再起動の影響を受けない
+### `newsprism-batch serve`
 
----
+HTTP サーバー + 内蔵 cron スケジューラとして常駐:
 
-## API設計
-
-### POST `/api/batch/run`
-
-バッチパイプラインを実行する。排他制御あり（二重実行防止）。
-
-```typescript
-// リクエスト
-POST /api/batch/run
-Authorization: Bearer <BATCH_SECRET>  // 簡易認証（env変数）
-
-// レスポンス
-{
-  snapshotId: string;
-  articleCount: number;
-  groupCount: number;
-  durationMs: number;
-  status: "success" | "partial" | "failed";
-}
+```
+POST /run          — パイプライン手動実行（Next.js の手動更新ボタンから）
+GET  /status       — 最新の実行結果サマリ
+GET  /health       — ヘルスチェック
 ```
 
-### GET `/api/batch/latest`
+```go
+c := cron.New()
+c.AddFunc("0 * * * *", func() { pipeline.Run(ctx) })
+c.Start()
 
-最新スナップショットを返す。UIのメインデータソース。
-
-```typescript
-// レスポンス
-{
-  snapshot: {
-    id: string;
-    processedAt: string;
-    groups: SnapshotGroup[];  // items含む
-  } | null;
-}
-```
-
-### GET `/api/batch/history`
-
-過去のスナップショット一覧（デバッグ・管理用）。
-
-```typescript
-// クエリパラメータ
-?limit=10
-
-// レスポンス
-{
-  snapshots: {
-    id: string;
-    processedAt: string;
-    articleCount: number;
-    groupCount: number;
-    status: string;
-  }[];
-}
+r := chi.NewRouter()
+r.Post("/run", handleRun)
+r.Get("/status", handleStatus)
+r.Get("/health", handleHealth)
+http.ListenAndServe(":8090", r)
 ```
 
 ---
 
-## パイプライン実装方針
+## Next.js 側の変更
+
+### 読み取り API（Next.js に残す）
 
 ```
-src/lib/batch/
-  pipeline.ts       — パイプラインオーケストレータ
-  collect.ts        — RSS収集 + RssArticle upsert
-  embed.ts          — 未embed記事のバッチembedding
-  classify.ts       — 未classify記事の分類
-  group.ts          — クラスタリング + 命名
-  store.ts          — スナップショット保存
-  lock.ts           — 排他制御（DBベース or ファイルロック）
+GET /api/batch/latest   — 最新スナップショット取得（Prisma で読むだけ）
+GET /api/batch/history  — 履歴一覧
 ```
 
-### パイプライン疑似コード
+これらは単純な DB 読み取りなので Next.js API Route のまま。
+
+### 手動更新ボタン
+
+`/ranking` ページの更新ボタンから Go サーバーの `POST /run` を呼ぶ:
 
 ```typescript
-export async function runPipeline(): Promise<PipelineResult> {
-  const lock = await acquireLock("batch-pipeline");
-  if (!lock) throw new Error("別のバッチが実行中");
+// Next.js の環境変数
+BATCH_SERVER_URL=http://localhost:8090
 
-  const start = Date.now();
-  try {
-    // 1. 収集: 全フィードからRSS取得 → RssArticle upsert
-    const collected = await collectFeeds();
-
-    // 2. Embed: embeddedAt が null の記事をバッチembedding
-    const embedded = await embedNewArticles();
-
-    // 3. 分類: classifiedAt が null の記事を分類
-    const classified = await classifyNewArticles();
-
-    // 4. グループ化: 過去3日のembedding済み記事でクラスタリング
-    const groups = await groupRecentArticles();
-
-    // 5. 保存: スナップショットとしてDB保存
-    const snapshot = await storeSnapshot(groups, {
-      articleCount: collected.length,
-      durationMs: Date.now() - start,
-    });
-
-    return { status: "success", snapshot };
-  } finally {
-    await releaseLock(lock);
-  }
-}
+// ボタン押下時
+await fetch(`${process.env.NEXT_PUBLIC_BATCH_SERVER_URL}/run`, { method: "POST" });
 ```
 
-### 排他制御
+### 廃止する API Route
 
-DBテーブルで簡易ロック:
+Phase B（スナップショット読み出しに切り替え後）:
 
-```prisma
-model BatchLock {
-  id        String   @id @default("singleton")
-  lockedAt  DateTime
-  expiresAt DateTime  // タイムアウト（10分）
-}
-```
-
-`INSERT ... ON CONFLICT DO NOTHING` + `expiresAt` チェックで排他制御。
-プロセスクラッシュ時も `expiresAt` 超過で自動解放。
-
----
-
-## 既存処理との関係
-
-### 移行戦略: 段階的
-
-| フェーズ | 状態 |
+| 廃止候補 | 理由 |
 |---------|------|
-| **Phase A** | バッチ実行を追加。UIは従来通りオンデマンド（並行運用） |
-| **Phase B** | UIのデフォルトデータソースを `GET /api/batch/latest` に切替 |
-| **Phase C** | オンデマンドAPI（`/api/rss/group`）は手動更新ボタン用に残す |
+| `POST /api/rss/group` | Go バッチが代替 |
+| `GET /api/rss` | フィード取得は Go に移行 |
+| `GET /api/bias/coverage` | スナップショットに `coveredBy`/`silentMedia` 含有 |
 
-### 変更しないもの
+### 残す API Route
 
-- `/api/analyze` — 個別記事の3軸分析は引き続きオンデマンド（ユーザーが選択した記事だけ分析）
-- `/api/fetch-article` — 記事本文取得もオンデマンド
-- `FeedGroup` / `FeedGroupItem` — 既存のインクリメンタルグループ化はバッチ内部で再利用可能
-
-### 廃止候補
-
-- `/api/bias/coverage` GET — バッチスナップショットに `coveredBy`/`silentMedia` が含まれるため不要に
-- フロント側のRSS取得 → グループ化のオンデマンドフロー（Phase B以降）
+| エンドポイント | 理由 |
+|--------------|------|
+| `POST /api/analyze` | 個別記事の3軸分析はオンデマンド（ユーザー操作起点） |
+| `POST /api/fetch-article` | 記事本文取得もオンデマンド |
+| `GET /api/batch/latest` | スナップショット読み取り |
 
 ---
 
-## UIの変更
+## 移行戦略
 
-### メインフィード画面
-
-```
-現在: ページ表示 → /api/rss → /api/rss/group → 表示
-変更: ページ表示 → /api/batch/latest → 表示（即時）
-```
-
-- `processedAt` を表示（「最終更新: 14:00」）
-- 手動更新ボタン: `/api/batch/run` をPOST → 完了後にリロード
-- スナップショットが存在しない場合のみ従来のオンデマンドフローにフォールバック
-
-### バイアス分析画面
-
-- `/api/batch/latest` のレスポンスに `coveredBy`/`silentMedia` が含まれるため、別APIなしでカバレッジマトリクスを描画可能
+| フェーズ | 内容 | Go の範囲 |
+|---------|------|----------|
+| **Phase A** | Go バッチ実行可能。UI は従来のオンデマンドも併用 | collect → store |
+| **Phase B** | `/ranking` のデータソースを `GET /api/batch/latest` に切替 | 同上 |
+| **Phase C** | オンデマンド RSS API を廃止 | 同上 + フィード取得完全移管 |
+| **Phase D（将来）** | `/api/analyze` も Go に移管（SSE 含む） | 全バックエンド |
 
 ---
 
-## スケジュール設定
+## Google News 固有ロジック（移植が必要）
 
-### 推奨スケジュール
+Go の RSS パーサーで再実装する必要がある箇所:
 
-| 時間帯 | 頻度 | 理由 |
-|--------|------|------|
-| 6:00〜24:00 | 毎時 | ニュースが活発な時間帯 |
-| 0:00〜5:00 | なし or 3時間毎 | 深夜は更新が少ない |
+1. **`<source>` 要素から媒体名抽出**: `gofeed` の `Extensions` から取得
+2. **タイトル末尾の " - 媒体名" 除去**: 正規表現で strip
+3. **`canonicalSource` による表記揺れ統一**: feeds.yaml で定義、パース時に適用
+4. **政治フィルタ（キーワードマッチ）**: `POLITICAL_KEYWORDS` / `EXCLUDE_KEYWORDS` の Go 移植
 
-開発時は手動実行（UIボタン or curl）で十分。
+---
 
-### launchdの例（macOS）
+## 分類カスケード（移植が必要）
 
-```xml
-<!-- ~/Library/LaunchAgents/com.newsprism.batch.plist -->
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>com.newsprism.batch</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/usr/bin/curl</string>
-    <string>-s</string>
-    <string>-X</string>
-    <string>POST</string>
-    <string>http://localhost:3000/api/batch/run</string>
-  </array>
-  <key>StartCalendarInterval</key>
-  <array>
-    <!-- 6:00〜23:00 の毎時0分 -->
-    <dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
-    <!-- ... 省略 ... -->
-    <dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>0</integer></dict>
-  </array>
-</dict>
-</plist>
+現在の TypeScript 実装:
+1. 参照 embedding を起動時に1回生成（サブカテゴリごとの文言をベクトル化）
+2. 記事 embedding とコサイン類似度で分類（CPU で完結）
+3. confidence < 0.5 の場合のみ LLM にフォールバック
+
+Go 移植のポイント:
+- 参照 embedding は DB or メモリにキャッシュ（Go はプロセスが長寿命なのでメモリキャッシュが有効）
+- コサイン類似度計算は Go で直書き（ライブラリ不要）
+- LLM フォールバックは `llm/chat.go` 経由
+
+---
+
+## 環境変数
+
+```bash
+# backend/.env
+DATABASE_URL=postgresql://newsprism:newsprism@localhost:5432/newsprism
+LLM_BASE_URL=http://localhost:8081
+LLM_MODEL=ggml-org/gemma-4-E4B-it-Q8_0
+CLASSIFY_MODEL=ggml-org/gemma-4-E4B-it-Q8_0
+EMBED_MODEL=Targoyle/ruri-v3-310m-GGUF:Q8_0
+GROUP_CLUSTER_THRESHOLD=0.87
+FEED_GROUP_SIMILARITY_THRESHOLD=0.87
+EMBED_CLASSIFY_THRESHOLD=0.5
+BATCH_PORT=8090
 ```
+
+Next.js の `src/lib/config/index.ts` と同じキーを使用。
 
 ---
 
 ## 注意事項
 
-- **llama.cpp の起動前提**: embedding/LLMはローカルllama.cppサーバーに依存。バッチ実行時にサーバーが起動していなければ `status: "partial"` で記録（collectまでは成功）
-- **スナップショットの保持期間**: 7日分を保持、それ以前はCASCADE削除
-- **RssArticle embedding**: `Unsupported("vector(1024)")` なので生SQLで操作（既存パターンと同一）
-- **初回実行**: スナップショットが空の場合、UIはフォールバックとしてオンデマンドフローを使用
+- **スキーマ管理**: Prisma でマイグレーション（Next.js と DB スキーマを共有）。Go は pgx で直接操作
+- **llama.cpp の起動前提**: embedding/LLM はローカルサーバーに依存。未起動時は `status: "partial"` で記録
+- **スナップショット保持期間**: 7日分を保持、それ以前は CASCADE 削除
+- **初回実行**: スナップショットが空の場合、UI はフォールバックとしてオンデマンドフローを使用（Phase A）
+- **SnapshotGroupItem.topic → category**: 3層 taxonomy リネーム済みに合わせて `category` / `subcategory` を使用

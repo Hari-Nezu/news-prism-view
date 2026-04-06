@@ -2,7 +2,8 @@ import Parser from "rss-parser";
 import type { RssFeedItem } from "@/types";
 import { ALL_FEED_SOURCES, DEFAULT_ENABLED_IDS, type FeedConfig } from "./config/feed-configs";
 import { fetchNewsdataArticles } from "./newsdata-client";
-import { upsertRssArticles } from "./db";
+import { upsertRssArticles, saveRssArticleEmbeddings } from "./db";
+import { embedBatch } from "./embeddings";
 import { classifyArticlesBatchLLM } from "./news-classifier-llm";
 import { validatePublicUrl } from "./article-fetcher";
 
@@ -206,9 +207,18 @@ export async function fetchAllDefaultFeeds(
     });
   }
 
-  void upsertRssArticles(sorted).catch((e) =>
-    console.error("[rss-parser] DB保存エラー:", e)
-  );
+  void (async () => {
+    await upsertRssArticles(sorted);
+    // embedding を計算して保存（URLあり記事のみ）
+    const withUrl = sorted.filter((item) => item.url);
+    const vecs = await embedBatch(
+      withUrl.map((i) => i.summary ? `${i.title}\n${i.summary.slice(0, 200)}` : i.title)
+    );
+    const entries = withUrl
+      .map((item, i) => ({ url: item.url!, vec: vecs[i] }))
+      .filter((e): e is { url: string; vec: number[] } => e.vec != null);
+    await saveRssArticleEmbeddings(entries);
+  })().catch((e) => console.error("[rss-parser] DB保存エラー:", e));
 
   return sorted;
 }
