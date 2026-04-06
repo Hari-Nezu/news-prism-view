@@ -30,7 +30,7 @@ type Message struct {
 
 // Complete sends a chat completion request and returns the assistant message content.
 func (c *ChatClient) Complete(ctx context.Context, system, user string) (string, error) {
-	body, _ := json.Marshal(map[string]any{
+	body, err := json.Marshal(map[string]any{
 		"model": c.Model,
 		"messages": []Message{
 			{Role: "system", Content: system},
@@ -40,6 +40,9 @@ func (c *ChatClient) Complete(ctx context.Context, system, user string) (string,
 		"response_format": map[string]string{"type": "json_object"},
 		"temperature":     0.1,
 	})
+	if err != nil {
+		return "", fmt.Errorf("marshal chat request: %w", err)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {

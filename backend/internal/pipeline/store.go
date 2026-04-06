@@ -23,6 +23,7 @@ func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []stri
 		cluster      Cluster
 		title        string
 		singleOutlet bool
+		sources      []string
 		sourceCount  int
 		finalScore   float64
 	}
@@ -60,6 +61,7 @@ func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []stri
 			cluster:      c,
 			title:        titles[i],
 			singleOutlet: sourceCount <= 1,
+			sources:      srcs,
 			sourceCount:  sourceCount,
 			finalScore:   sourceScore * timeScore,
 		}
@@ -79,8 +81,7 @@ func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []stri
 
 	groups := make([]db.SnapshotGroup, len(items))
 	for i, r := range items {
-		covered := uniqueSources(r.cluster.Articles)
-		silent := silentSources(covered)
+		silent := silentSources(r.sources)
 
 		groupItems := make([]db.SnapshotGroupItem, len(r.cluster.Articles))
 		for j, a := range r.cluster.Articles {
@@ -104,7 +105,7 @@ func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []stri
 			Category:     r.cluster.DomCat,
 			Rank:         i + 1,
 			SingleOutlet: r.singleOutlet,
-			CoveredBy:    covered,
+			CoveredBy:    r.sources,
 			SilentMedia:  silent,
 			Items:        groupItems,
 		}
