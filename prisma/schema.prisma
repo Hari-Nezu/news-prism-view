@@ -40,17 +40,19 @@ model Article {
 
 /// RSSフィードから取得した生記事（永続化・重複排除用）
 model RssArticle {
-  id          String    @id @default(cuid())
-  url         String    @unique
-  title       String
-  source      String
-  summary     String?
-  imageUrl    String?
-  publishedAt DateTime?
-  category    String?
-  subcategory String?
-  fetchedAt   DateTime  @default(now())
-  embedding   Unsupported("vector(768)")?
+  id           String    @id @default(cuid())
+  url          String    @unique
+  title        String
+  source       String
+  summary      String?
+  imageUrl     String?
+  publishedAt  DateTime?
+  category     String?
+  subcategory  String?
+  fetchedAt    DateTime  @default(now())
+  embeddedAt   DateTime?
+  classifiedAt DateTime?
+  embedding    Unsupported("vector(768)")?
 
   @@index([fetchedAt(sort: Desc)])
   @@index([publishedAt(sort: Desc)])
@@ -82,6 +84,53 @@ model FeedGroupItem {
 
   @@unique([groupId, url])
   @@index([url])
+}
+
+/// Goバッチパイプラインの実行結果スナップショット
+model ProcessedSnapshot {
+  id           String          @id @default(cuid())
+  processedAt  DateTime        @default(now())
+  articleCount Int
+  groupCount   Int
+  durationMs   Int
+  status       String          // 'success' | 'partial' | 'failed'
+  error        String?
+  groups       SnapshotGroup[]
+
+  @@index([processedAt(sort: Desc)])
+}
+
+/// スナップショット内のニュースグループ
+model SnapshotGroup {
+  id           String               @id @default(cuid())
+  snapshot     ProcessedSnapshot    @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  snapshotId   String
+  groupTitle   String
+  category     String?
+  subcategory  String?
+  rank         Int
+  singleOutlet Boolean
+  coveredBy    Json?                // string[]
+  silentMedia  Json?                // string[]
+  items        SnapshotGroupItem[]
+
+  @@index([snapshotId])
+}
+
+/// グループ内の記事
+model SnapshotGroupItem {
+  id          String        @id @default(cuid())
+  group       SnapshotGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId     String
+  title       String
+  url         String
+  source      String
+  summary     String?
+  publishedAt String?
+  category    String?
+  subcategory String?
+
+  @@index([groupId])
 }
 
 /// メディア比較セッション（比較ページ）

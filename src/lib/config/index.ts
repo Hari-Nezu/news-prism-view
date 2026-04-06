@@ -81,6 +81,9 @@ export const DATABASE_URL = process.env.DATABASE_URL
 // ── 外部API ───────────────────────────────────────────────
 export const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY ?? null;
 
+// ── Goバッチサーバー ──────────────────────────────────────
+export const BATCH_SERVER_URL = process.env.BATCH_SERVER_URL ?? "http://localhost:8090";
+
 // ── ログ出力 ──────────────────────────────────────────────
 if (typeof window === "undefined") {
   console.log("──────────────────────────────────────────────────");
