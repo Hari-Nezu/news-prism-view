@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/newsprism/batch/internal/db"
 	"github.com/newsprism/batch/internal/llm"
@@ -20,13 +21,52 @@ type namingResult struct {
 	Groups []groupNaming `json:"groups"`
 }
 
+const nameChunkSize = 15
+
 // NameClusters calls LLM to assign Japanese titles to each cluster.
-// Falls back to keyword-based titles on error.
+// Singleton clusters are named via fallback without calling the LLM.
+// Multi-article clusters are processed in chunks of nameChunkSize.
 func NameClusters(ctx context.Context, chatClient *llm.ChatClient, clusters []Cluster) []string {
 	titles := make([]string, len(clusters))
 	if len(clusters) == 0 {
 		return titles
 	}
+
+	// Separate singletons (no LLM needed) from multi-article clusters
+	type indexedCluster struct {
+		orig  int
+		c     Cluster
+	}
+	var multi []indexedCluster
+	for i, c := range clusters {
+		if len(c.Articles) <= 1 {
+			titles[i] = fallbackTitle(c)
+		} else {
+			multi = append(multi, indexedCluster{i, c})
+		}
+	}
+
+	slog.Info("name: LLM targets", "multi", len(multi), "singleton_fallback", len(clusters)-len(multi))
+
+	for start := 0; start < len(multi); start += nameChunkSize {
+		end := start + nameChunkSize
+		if end > len(multi) {
+			end = len(multi)
+		}
+		chunk := make([]Cluster, end-start)
+		for i, ic := range multi[start:end] {
+			chunk[i] = ic.c
+		}
+		chunkTitles := nameChunk(ctx, chatClient, chunk, start)
+		for i, ic := range multi[start:end] {
+			titles[ic.orig] = chunkTitles[i]
+		}
+	}
+	return titles
+}
+
+func nameChunk(ctx context.Context, chatClient *llm.ChatClient, clusters []Cluster, offset int) []string {
+	titles := make([]string, len(clusters))
 
 	var clusterList strings.Builder
 	for i, c := range clusters {
@@ -43,7 +83,7 @@ func NameClusters(ctx context.Context, chatClient *llm.ChatClient, clusters []Cl
 		}
 
 		fmt.Fprintf(&clusterList, "グループ%d（%s）%s\n  記事: %s\n\n",
-			i, cat, commonLine, strings.Join(titleParts, " "),
+			offset+i, cat, commonLine, strings.Join(titleParts, " "),
 		)
 	}
 
@@ -61,18 +101,44 @@ func NameClusters(ctx context.Context, chatClient *llm.ChatClient, clusters []Cl
 必ずJSON形式のみで回答してください。
 出力フォーマット: { "groups": [{ "index": 0, "title": "タイトル" }, ...] }`
 
-	content, err := chatClient.Complete(ctx, system, clusterList.String())
+	prompt := clusterList.String()
+	// Log chunk summary: which clusters, sizes, prompt length
+	clusterSummary := make([]string, len(clusters))
+	for i, c := range clusters {
+		first := ""
+		if len(c.Articles) > 0 {
+			r := []rune(c.Articles[0].Title)
+			if len(r) > 15 {
+				r = r[:15]
+			}
+			first = string(r)
+		}
+		clusterSummary[i] = fmt.Sprintf("[%d:%d記事 %q]", offset+i, len(c.Articles), first)
+	}
+	t0 := time.Now()
+	slog.Debug("name chunk start",
+		"chunk_offset", offset,
+		"clusters", len(clusters),
+		"prompt_bytes", len(prompt),
+		"items", strings.Join(clusterSummary, " "),
+	)
+
+	content, err := chatClient.Complete(ctx, system, prompt)
+	elapsed := time.Since(t0)
 	if err != nil {
-		slog.Warn("name clusters LLM error, using fallback", "err", err)
+		slog.Warn("name clusters LLM error, using fallback",
+			"err", err, "chunk_offset", offset, "elapsed_ms", elapsed.Milliseconds())
 		for i, c := range clusters {
 			titles[i] = fallbackTitle(c)
 		}
 		return titles
 	}
 
+	slog.Debug("name chunk done", "chunk_offset", offset, "elapsed_ms", elapsed.Milliseconds())
+
 	var result namingResult
 	if err := json.Unmarshal([]byte(content), &result); err != nil {
-		slog.Warn("name clusters JSON parse error, using fallback", "err", err)
+		slog.Warn("name clusters JSON parse error, using fallback", "err", err, "chunk_offset", offset)
 		for i, c := range clusters {
 			titles[i] = fallbackTitle(c)
 		}
@@ -84,7 +150,7 @@ func NameClusters(ctx context.Context, chatClient *llm.ChatClient, clusters []Cl
 		titleMap[g.Index] = g.Title
 	}
 	for i, c := range clusters {
-		if t, ok := titleMap[i]; ok && t != "" {
+		if t, ok := titleMap[offset+i]; ok && t != "" {
 			titles[i] = t
 		} else {
 			titles[i] = fallbackTitle(c)

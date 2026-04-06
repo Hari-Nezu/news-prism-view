@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -36,9 +37,9 @@ func (c *ChatClient) Complete(ctx context.Context, system, user string) (string,
 			{Role: "system", Content: system},
 			{Role: "user", Content: user},
 		},
-		"stream":          false,
-		"response_format": map[string]string{"type": "json_object"},
-		"temperature":     0.1,
+		"stream":      false,
+		"temperature": 1.0,
+		"max_tokens":  2048, // budget_tokens=0 reverts to infinity, setting explicit max_tokens limits both thinking and generation tokens.
 	})
 	if err != nil {
 		return "", fmt.Errorf("marshal chat request: %w", err)
@@ -57,7 +58,8 @@ func (c *ChatClient) Complete(ctx context.Context, system, user string) (string,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("chat HTTP %d", resp.StatusCode)
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return "", fmt.Errorf("chat HTTP %d: %s", resp.StatusCode, string(errBody))
 	}
 
 	var result struct {

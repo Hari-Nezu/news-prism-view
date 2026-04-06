@@ -24,34 +24,44 @@ func NewEmbedClient(baseURL, model string) *EmbedClient {
 	}
 }
 
-// EmbedBatch vectorizes texts, sending them one at a time.
+const embedChunkSize = 32
+
+// EmbedBatch vectorizes texts in chunks of embedChunkSize per HTTP request.
 // Returns nil slice elements for failed items.
 func (c *EmbedClient) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, nil
 	}
 
-	vecs := make([][]float32, len(texts))
+	// Normalize: prefix + truncate
+	prepared := make([]string, len(texts))
 	for i, t := range texts {
-		// ruri-v3 context limit: 512 tokens. Japanese ≈ 1-2 tokens/rune.
-		// "文章: " prefix costs ~3 tokens, so cap at 400 runes.
 		if r := []rune(t); len(r) > 400 {
 			t = string(r[:400])
 		}
-		// ruri-v3 requires "文章: " prefix for document embeddings
-		vec, err := c.embedOne(ctx, "文章: "+t)
-		if err != nil {
-			return nil, fmt.Errorf("text %d: %w", i, err)
+		prepared[i] = "文章: " + t
+	}
+
+	vecs := make([][]float32, len(texts))
+	for start := 0; start < len(prepared); start += embedChunkSize {
+		end := start + embedChunkSize
+		if end > len(prepared) {
+			end = len(prepared)
 		}
-		vecs[i] = vec
+		chunk := prepared[start:end]
+		got, err := c.embedBatchRequest(ctx, chunk)
+		if err != nil {
+			return nil, fmt.Errorf("chunk %d-%d: %w", start, end, err)
+		}
+		copy(vecs[start:end], got)
 	}
 	return vecs, nil
 }
 
-func (c *EmbedClient) embedOne(ctx context.Context, input string) ([]float32, error) {
+func (c *EmbedClient) embedBatchRequest(ctx context.Context, inputs []string) ([][]float32, error) {
 	body, err := json.Marshal(map[string]any{
 		"model": c.Model,
-		"input": input,
+		"input": inputs,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("marshal embed request: %w", err)
@@ -70,12 +80,13 @@ func (c *EmbedClient) embedOne(ctx context.Context, input string) ([]float32, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("embed HTTP %d: %s", resp.StatusCode, body)
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, fmt.Errorf("embed HTTP %d: %s", resp.StatusCode, b)
 	}
 
 	var result struct {
 		Data []struct {
+			Index     int       `json:"index"`
 			Embedding []float32 `json:"embedding"`
 		} `json:"data"`
 	}
@@ -85,5 +96,12 @@ func (c *EmbedClient) embedOne(ctx context.Context, input string) ([]float32, er
 	if len(result.Data) == 0 {
 		return nil, fmt.Errorf("empty embedding response")
 	}
-	return result.Data[0].Embedding, nil
+
+	vecs := make([][]float32, len(inputs))
+	for _, d := range result.Data {
+		if d.Index < len(vecs) {
+			vecs[d.Index] = d.Embedding
+		}
+	}
+	return vecs, nil
 }

@@ -17,8 +17,12 @@ import (
 )
 
 func main() {
+	logLevel := slog.LevelInfo
+	if os.Getenv("DEBUG") != "" {
+		logLevel = slog.LevelDebug
+	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: logLevel,
 	})))
 
 	if len(os.Args) < 2 {
