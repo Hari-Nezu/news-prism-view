@@ -49,10 +49,13 @@ func (c *EmbedClient) EmbedBatch(ctx context.Context, texts []string) ([][]float
 }
 
 func (c *EmbedClient) embedOne(ctx context.Context, input string) ([]float32, error) {
-	body, _ := json.Marshal(map[string]any{
+	body, err := json.Marshal(map[string]any{
 		"model": c.Model,
 		"input": input,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal embed request: %w", err)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/v1/embeddings", bytes.NewReader(body))
 	if err != nil {
