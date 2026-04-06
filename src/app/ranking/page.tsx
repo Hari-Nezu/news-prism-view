@@ -3,58 +3,61 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { NewsGroup, RssFeedItem } from "@/types";
+import type { SnapshotMeta } from "@/lib/db";
 import RankingFeedView from "@/components/RankingFeedView";
 import OllamaStatus from "@/components/OllamaStatus";
-import { loadFeedSettings } from "@/components/FeedSettingsDrawer";
-import { ALL_FEED_SOURCES } from "@/lib/config/feed-configs";
 
-/** enabledIds から DB フィルタ用ソース名リストを計算する。
- *  Google News フィードが含まれる場合はフィルタ不可なので null を返す。 */
-function resolveEnabledSources(enabledIds: string[], customFeedNames: string[]): string[] | null {
-  const enabledFeeds = ALL_FEED_SOURCES.filter((f) => enabledIds.includes(f.id));
-  if (enabledFeeds.some((f) => f.type === "google-news")) return null;
-  return [
-    ...enabledFeeds.map((f) => f.canonicalSource ?? f.name),
-    ...customFeedNames,
-  ];
+function formatRelative(iso: string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60)  return `${diff}秒前`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}分前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}時間前`;
+  return `${Math.floor(diff / 86400)}日前`;
 }
 
 export default function RankingPage() {
-  const today = new Date().toISOString().slice(0, 10);
-  const [groupDate,  setGroupDate]  = useState(today);
+  const [snapshot,   setSnapshot]   = useState<SnapshotMeta | null>(null);
   const [groups,     setGroups]     = useState<NewsGroup[]>([]);
-  const [isGrouping, setIsGrouping] = useState(false);
+  const [isLoading,  setIsLoading]  = useState(false);
+  const [isRunning,  setIsRunning]  = useState(false);
   const [error,      setError]      = useState("");
+  const [runMessage, setRunMessage] = useState("");
 
-  const fetchGroups = useCallback(async (date: string) => {
-    const settings = loadFeedSettings();
-    const enabledSources = resolveEnabledSources(
-      settings.enabledIds,
-      settings.customFeeds.map((cf) => cf.name),
-    );
-
-    setIsGrouping(true);
+  const fetchLatest = useCallback(async () => {
+    setIsLoading(true);
     setError("");
-    setGroups([]);
     try {
-      const res = await fetch("/api/rss/group", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetDate: date, enabledSources }),
-      });
+      const res = await fetch("/api/batch/latest");
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "グループ化に失敗しました");
+      if (!res.ok) throw new Error(data.error ?? "取得に失敗しました");
+      setSnapshot(data.snapshot ?? null);
       setGroups(data.groups ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "グループ化に失敗しました");
+      setError(e instanceof Error ? e.message : "取得に失敗しました");
     } finally {
-      setIsGrouping(false);
+      setIsLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchGroups(today);
-  }, [fetchGroups, today]);
+  useEffect(() => { fetchLatest(); }, [fetchLatest]);
+
+  async function handleRun() {
+    setIsRunning(true);
+    setRunMessage("");
+    try {
+      const res = await fetch("/api/batch/run", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setRunMessage(`エラー: ${data.error}`);
+      } else {
+        setRunMessage("バッチを開始しました。完了後に「更新」で再読み込みしてください。");
+      }
+    } catch {
+      setRunMessage("バッチサーバーに接続できませんでした");
+    } finally {
+      setIsRunning(false);
+    }
+  }
 
   function handleCompareArticle(item: RssFeedItem) {
     window.location.href = `/compare?q=${encodeURIComponent(item.title)}`;
@@ -92,33 +95,50 @@ export default function RankingPage() {
       </header>
 
       <main className="mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-[900px]">
-        {/* 日付ピッカー */}
+        {/* ツールバー */}
         <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs text-gray-500">対象日:</span>
-          <input
-            type="date"
-            value={groupDate}
-            max={today}
-            disabled={isGrouping}
-            onChange={(e) => {
-              setGroupDate(e.target.value);
-              fetchGroups(e.target.value);
-            }}
-            className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-amber-300 disabled:opacity-50"
-          />
-          <span className="text-[10px] text-gray-400">（その日を含む直近3日間）</span>
-          <button
-            onClick={() => fetchGroups(groupDate)}
-            disabled={isGrouping}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors ml-auto"
-          >
-            {isGrouping
-              ? <div className="w-3.5 h-3.5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
-              : <span>↻</span>
-            }
-            {isGrouping ? "分析中" : "更新"}
-          </button>
+          {snapshot ? (
+            <span className="text-xs text-gray-500">
+              最終更新: <span className="text-gray-700 font-medium">{formatRelative(snapshot.processedAt)}</span>
+              <span className="ml-2 text-gray-400">
+                ({snapshot.groupCount}グループ / {snapshot.articleCount}記事)
+              </span>
+            </span>
+          ) : (
+            <span className="text-xs text-gray-400">スナップショットなし</span>
+          )}
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={handleRun}
+              disabled={isRunning || isLoading}
+              title="Goバッチを手動実行"
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50 disabled:opacity-50 transition-colors"
+            >
+              {isRunning
+                ? <div className="w-3.5 h-3.5 border-2 border-amber-300 border-t-amber-600 rounded-full animate-spin" />
+                : <span>⚡</span>
+              }
+              バッチ実行
+            </button>
+            <button
+              onClick={fetchLatest}
+              disabled={isLoading || isRunning}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              {isLoading
+                ? <div className="w-3.5 h-3.5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                : <span>↻</span>
+              }
+              更新
+            </button>
+          </div>
         </div>
+
+        {runMessage && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-2 mb-4">
+            <p className="text-xs text-amber-700">{runMessage}</p>
+          </div>
+        )}
 
         {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 mb-4">
@@ -126,10 +146,15 @@ export default function RankingPage() {
           </div>
         )}
 
-        {isGrouping ? (
+        {isLoading ? (
           <div className="flex flex-col items-center justify-center py-16 text-gray-400">
             <div className="w-8 h-8 border-2 border-gray-200 border-t-amber-500 rounded-full animate-spin mb-4" />
-            <p className="text-sm">AIでグループ化しています...</p>
+            <p className="text-sm">読み込み中...</p>
+          </div>
+        ) : !snapshot ? (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+            <p className="text-sm mb-2">スナップショットがありません</p>
+            <p className="text-xs">「バッチ実行」ボタンで最初のスナップショットを生成してください。</p>
           </div>
         ) : (
           <RankingFeedView

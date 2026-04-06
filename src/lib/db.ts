@@ -6,7 +6,7 @@ import { DATABASE_URL } from "@/lib/config";
 // PrismaClient レイジーシングルトン
 // スキーマ変更後に prisma generate を実行した場合、dev サーバーの再起動が必要。
 // （globalThis はHMR をまたいで保持されるため、古いインスタンスがキャッシュされ続ける）
-const PRISMA_CACHE_KEY = "prisma_v6"; // スキーマ変更時にインクリメントする
+const PRISMA_CACHE_KEY = "prisma_v7"; // スキーマ変更時にインクリメントする
 const globalForPrisma = globalThis as unknown as Record<string, PrismaClient | undefined>;
 
 function getPrisma(): PrismaClient {
@@ -431,6 +431,91 @@ export async function getRssArticlesBetween(since: Date, until: Date, sources?: 
     publishedAt: r.publishedAt instanceof Date ? r.publishedAt.toISOString() : r.publishedAt != null ? String(r.publishedAt) : undefined,
     category:    r.category != null ? String(r.category) : undefined,
     subcategory: r.subcategory != null ? String(r.subcategory) : undefined,
+  }));
+}
+
+// ── ProcessedSnapshot ─────────────────────────────────────
+
+export interface SnapshotMeta {
+  id:           string;
+  processedAt:  string;
+  articleCount: number;
+  groupCount:   number;
+  durationMs:   number;
+  status:       string;
+  error:        string | null;
+}
+
+export interface SnapshotResult {
+  snapshot: SnapshotMeta | null;
+  groups:   NewsGroup[];
+}
+
+/** 最新スナップショットを取得（グループ・記事含む） */
+export async function getLatestSnapshot(): Promise<SnapshotResult> {
+  const prisma = getPrisma();
+  const snap = await prisma.processedSnapshot.findFirst({
+    orderBy: { processedAt: "desc" },
+    where: { status: { in: ["success", "partial"] } },
+    include: {
+      groups: {
+        orderBy: { rank: "asc" },
+        include: { items: true },
+      },
+    },
+  });
+
+  if (!snap) return { snapshot: null, groups: [] };
+
+  const groups: NewsGroup[] = snap.groups.map((g) => ({
+    groupTitle:   g.groupTitle,
+    singleOutlet: g.singleOutlet,
+    category:     g.category ?? undefined,
+    subcategory:  g.subcategory ?? undefined,
+    items: g.items.map((item) => ({
+      title:       item.title,
+      url:         item.url,
+      source:      item.source,
+      summary:     item.summary ?? undefined,
+      publishedAt: item.publishedAt ?? undefined,
+      category:    item.category ?? undefined,
+      subcategory: item.subcategory ?? undefined,
+    })),
+  }));
+
+  return {
+    snapshot: {
+      id:           snap.id,
+      processedAt:  snap.processedAt.toISOString(),
+      articleCount: snap.articleCount,
+      groupCount:   snap.groupCount,
+      durationMs:   snap.durationMs,
+      status:       snap.status,
+      error:        snap.error ?? null,
+    },
+    groups,
+  };
+}
+
+/** スナップショット履歴一覧（グループなし） */
+export async function getSnapshotHistory(limit = 20): Promise<SnapshotMeta[]> {
+  const rows = await getPrisma().processedSnapshot.findMany({
+    orderBy: { processedAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      processedAt: true,
+      articleCount: true,
+      groupCount: true,
+      durationMs: true,
+      status: true,
+      error: true,
+    },
+  });
+  return rows.map((r) => ({
+    ...r,
+    processedAt: r.processedAt.toISOString(),
+    error: r.error ?? null,
   }));
 }
 
