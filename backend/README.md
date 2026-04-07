@@ -94,16 +94,22 @@ RssArticle                            ProcessedSnapshot
 
 ```yaml
 feeds:
-  - id: gnews-politics
-    url: "https://news.google.com/rss/..."
-    type: google-news          # "rss" or "google-news"
-    category: 政治
+  - id: nhk
+    url: "https://www.nhk.or.jp/rss/news/cat0.xml"
+    type: rss                  # "rss" or "google-news"
+    category: 総合
     filter_political: false    # trueにすると政治・経済キーワードでフィルタ
     default_enabled: true
-    canonical_source: ""       # Google Newsで表示される媒体名を上書き
+  - id: yomiuri
+    url: "https://news.google.com/rss/search?q=site:yomiuri.co.jp&hl=ja&gl=JP&ceid=JP:ja"
+    type: google-news
+    category: 総合
+    filter_political: false
+    default_enabled: true
+    canonical_source: "読売新聞"  # Google Newsで表示される媒体名を上書き
 ```
 
-現在 `default_enabled: true` はGoogle News（政治・経済・国際）の3フィードのみ。
+現在 `default_enabled: true` は大手メディア15社（NHK・朝日・毎日・産経・東洋経済・ハフポスト・読売・日経・東京・時事・共同・TBS・テレ朝・日テレ・フジ）。Google Newsトピック検索（政治・経済・国際）は `default_enabled: false`。
 
 ---
 

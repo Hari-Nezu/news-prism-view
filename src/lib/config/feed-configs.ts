@@ -23,7 +23,7 @@ export interface FeedConfig {
 }
 
 export const ALL_FEED_SOURCES: FeedConfig[] = [
-  // ── Google News トピック別（デフォルト有効） ────────────────
+  // ── Google News トピック別（無効） ──────────────────────────
   {
     id: "gnews-politics",
     name: "Google News 政治",
@@ -31,7 +31,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "政治",
     filterPolitical: false,
-    defaultEnabled: true,
+    defaultEnabled: false,
   },
   {
     id: "gnews-economy",
@@ -40,7 +40,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "経済",
     filterPolitical: false,
-    defaultEnabled: true,
+    defaultEnabled: false,
   },
   {
     id: "gnews-world",
@@ -49,7 +49,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "国際",
     filterPolitical: false,
-    defaultEnabled: true,
+    defaultEnabled: false,
   },
 
   // ── バイアス分析対象 15社（直接 RSS） ───────────────────────
@@ -60,7 +60,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
   },
   {
     id: "asahi",
@@ -69,7 +69,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
   },
   {
     id: "mainichi",
@@ -78,7 +78,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
   },
   {
     id: "sankei",
@@ -87,7 +87,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
   },
   {
     id: "toyokeizai",
@@ -96,7 +96,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
   },
   {
     id: "huffpost-jp",
@@ -105,7 +105,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "rss",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
   },
 
   // ── バイアス分析対象 15社（Google News site: フィルタ） ──────
@@ -117,7 +117,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
     canonicalSource: "読売新聞",
   },
   {
@@ -127,7 +127,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
     canonicalSource: "日本経済新聞",
   },
   {
@@ -137,7 +137,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
     canonicalSource: "東京新聞",
   },
   {
@@ -147,7 +147,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
     canonicalSource: "時事通信",
   },
   {
@@ -157,7 +157,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
     canonicalSource: "共同通信",
   },
   {
@@ -167,7 +167,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
     canonicalSource: "TBSニュース",
   },
   {
@@ -177,7 +177,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
     canonicalSource: "テレビ朝日",
   },
   {
@@ -187,7 +187,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
     canonicalSource: "日本テレビ",
   },
   {
@@ -197,7 +197,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
     type: "google-news",
     category: "総合",
     filterPolitical: false,
-    defaultEnabled: false,
+    defaultEnabled: true,
     canonicalSource: "フジテレビ",
   },
 

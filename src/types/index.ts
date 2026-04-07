@@ -49,6 +49,10 @@ export interface NewsGroup {
   topic?: string;            // = groupTitle（具体的なイベント名）
   category?: string;         // グループ内の支配的大分類（"politics" | "economy" | ...）
   subcategory?: string;      // グループ内の支配的中分類
+  // SnapshotGroup 由来フィールド（/inspect ページで使用）
+  rank?:        number;
+  coveredBy?:   string[];
+  silentMedia?: string[];
 }
 
 // ── マルチモデル分析 ─────────────────────────────────

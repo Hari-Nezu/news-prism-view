@@ -341,6 +341,55 @@ export async function deleteStaleFeedGroups(): Promise<void> {
   );
 }
 
+export interface FeedGroupWithItems {
+  id:                string;
+  title:             string;
+  articleCount:      number;
+  lastSeenAt:        string;
+  createdAt:         string;
+  uniqueSourceCount: number;
+  singleOutlet:      boolean;
+  items: Array<{
+    id:          string;
+    title:       string;
+    url:         string;
+    source:      string;
+    publishedAt: string | null;
+    matchedAt:   string;
+  }>;
+}
+
+/** 点検用：アクティブなFeedGroupをitemsごと取得 */
+export async function getFeedGroupsWithItems(limit = 200): Promise<FeedGroupWithItems[]> {
+  const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const rows = await getPrisma().feedGroup.findMany({
+    where: { lastSeenAt: { gte: cutoff } },
+    orderBy: { articleCount: "desc" },
+    take: limit,
+    include: { items: { orderBy: { publishedAt: "desc" } } },
+  });
+  return rows.map((g) => {
+    const uniqueSources = new Set(g.items.map((i) => i.source)).size;
+    return {
+      id:                g.id,
+      title:             g.title,
+      articleCount:      g.articleCount,
+      lastSeenAt:        g.lastSeenAt.toISOString(),
+      createdAt:         g.createdAt.toISOString(),
+      uniqueSourceCount: uniqueSources,
+      singleOutlet:      uniqueSources === 1,
+      items: g.items.map((i) => ({
+        id:          i.id,
+        title:       i.title,
+        url:         i.url,
+        source:      i.source,
+        publishedAt: i.publishedAt ?? null,
+        matchedAt:   i.matchedAt.toISOString(),
+      })),
+    };
+  });
+}
+
 // ── RssArticle ────────────────────────────────────────────
 
 /** RSSから取得した記事を一括 upsert（URL重複はスキップ、topic/subcategoryのみ更新） */
@@ -472,6 +521,9 @@ export async function getLatestSnapshot(): Promise<SnapshotResult> {
     singleOutlet: g.singleOutlet,
     category:     g.category ?? undefined,
     subcategory:  g.subcategory ?? undefined,
+    rank:         g.rank,
+    coveredBy:    Array.isArray(g.coveredBy)   ? (g.coveredBy   as string[]) : [],
+    silentMedia:  Array.isArray(g.silentMedia) ? (g.silentMedia as string[]) : [],
     items: g.items.map((item) => ({
       title:       item.title,
       url:         item.url,
