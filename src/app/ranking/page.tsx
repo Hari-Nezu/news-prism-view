@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import type { NewsGroup, RssFeedItem } from "@/types";
+import type { NewsGroup } from "@/types";
 import type { SnapshotMeta } from "@/lib/db";
-import RankingFeedView from "@/components/RankingFeedView";
+import CoverageMatrix from "@/components/CoverageMatrix";
 import OllamaStatus from "@/components/OllamaStatus";
 
 function formatRelative(iso: string): string {
@@ -59,10 +59,6 @@ export default function RankingPage() {
     }
   }
 
-  function handleCompareArticle(item: RssFeedItem) {
-    window.location.href = `/compare?q=${encodeURIComponent(item.title)}`;
-  }
-
   return (
     <div className="min-h-screen bg-gray-50/80">
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-200/60">
@@ -94,7 +90,7 @@ export default function RankingPage() {
         </div>
       </header>
 
-      <main className="mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-[900px]">
+      <main className="mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-[1200px]">
         {/* ツールバー */}
         <div className="flex items-center gap-2 mb-4">
           {snapshot ? (
@@ -157,12 +153,7 @@ export default function RankingPage() {
             <p className="text-xs">「バッチ実行」ボタンで最初のスナップショットを生成してください。</p>
           </div>
         ) : (
-          <RankingFeedView
-            groups={groups}
-            analyzedUrls={[]}
-            onAnalyze={() => {}}
-            onCompareArticle={handleCompareArticle}
-          />
+          <CoverageMatrix groups={groups} />
         )}
       </main>
     </div>
