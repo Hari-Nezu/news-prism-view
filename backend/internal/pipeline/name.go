@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/newsprism/batch/internal/db"
@@ -48,18 +49,40 @@ func NameClusters(ctx context.Context, chatClient *llm.ChatClient, clusters []Cl
 
 	slog.Info("name: LLM targets", "multi", len(multi), "singleton_fallback", len(clusters)-len(multi))
 
+	type chunkResult struct {
+		multiSlice []indexedCluster
+		titles     []string
+	}
+
+	numChunks := (len(multi) + nameChunkSize - 1) / nameChunkSize
+	resultsCh := make(chan chunkResult, numChunks)
+	var wg sync.WaitGroup
+
 	for start := 0; start < len(multi); start += nameChunkSize {
 		end := start + nameChunkSize
 		if end > len(multi) {
 			end = len(multi)
 		}
-		chunk := make([]Cluster, end-start)
-		for i, ic := range multi[start:end] {
+		multiSlice := multi[start:end]
+		chunk := make([]Cluster, len(multiSlice))
+		for i, ic := range multiSlice {
 			chunk[i] = ic.c
 		}
-		chunkTitles := nameChunk(ctx, chatClient, chunk, start)
-		for i, ic := range multi[start:end] {
-			titles[ic.orig] = chunkTitles[i]
+		wg.Add(1)
+		go func(multiSlice []indexedCluster, chunk []Cluster, start int) {
+			defer wg.Done()
+			resultsCh <- chunkResult{multiSlice, nameChunk(ctx, chatClient, chunk, start)}
+		}(multiSlice, chunk, start)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultsCh)
+	}()
+
+	for res := range resultsCh {
+		for i, ic := range res.multiSlice {
+			titles[ic.orig] = res.titles[i]
 		}
 	}
 	return titles
@@ -136,8 +159,9 @@ func nameChunk(ctx context.Context, chatClient *llm.ChatClient, clusters []Clust
 
 	slog.Debug("name chunk done", "chunk_offset", offset, "elapsed_ms", elapsed.Milliseconds())
 
+	extracted := extractJSON(content)
 	var result namingResult
-	if err := json.Unmarshal([]byte(content), &result); err != nil {
+	if err := json.Unmarshal([]byte(extracted), &result); err != nil {
 		slog.Warn("name clusters JSON parse error, using fallback", "err", err, "chunk_offset", offset)
 		for i, c := range clusters {
 			titles[i] = fallbackTitle(c)
@@ -177,6 +201,20 @@ func fallbackTitle(c Cluster) string {
 		return t
 	}
 	return "不明"
+}
+
+// extractJSON finds the first JSON object {...} in s, stripping any preamble text
+// (e.g. thinking tokens) that the LLM may emit before the actual JSON.
+func extractJSON(s string) string {
+	start := strings.Index(s, "{")
+	if start == -1 {
+		return s
+	}
+	end := strings.LastIndex(s, "}")
+	if end < start {
+		return s
+	}
+	return s[start : end+1]
 }
 
 // extractCommonKeywords returns words appearing in ≥50% of article titles.

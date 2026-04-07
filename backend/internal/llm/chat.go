@@ -37,9 +37,10 @@ func (c *ChatClient) Complete(ctx context.Context, system, user string) (string,
 			{Role: "system", Content: system},
 			{Role: "user", Content: user},
 		},
-		"stream":      false,
-		"temperature": 1.0,
-		"max_tokens":  2048, // budget_tokens=0 reverts to infinity, setting explicit max_tokens limits both thinking and generation tokens.
+		"stream":         false,
+		"temperature":    0.3,
+		"max_tokens":     2048,
+		"repeat_penalty": 1.1,
 	})
 	if err != nil {
 		return "", fmt.Errorf("marshal chat request: %w", err)
