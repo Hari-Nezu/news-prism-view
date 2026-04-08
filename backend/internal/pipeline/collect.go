@@ -35,6 +35,7 @@ func Collect(ctx context.Context, pool *db.Pool, feeds []config.FeedConfig) ([]d
 		close(results)
 	}()
 
+	allowedSources := buildAllowedSources(feeds)
 	seen := make(map[string]bool)
 	var all []db.Article
 
@@ -48,6 +49,10 @@ func Collect(ctx context.Context, pool *db.Pool, feeds []config.FeedConfig) ([]d
 			if a.URL == "" || seen[a.URL] {
 				continue
 			}
+			if _, ok := allowedSources[a.Source]; !ok {
+				slog.Debug("skip article from non-target source", "feed", r.name, "source", a.Source, "url", a.URL)
+				continue
+			}
 			seen[a.URL] = true
 			all = append(all, a)
 		}
@@ -58,4 +63,25 @@ func Collect(ctx context.Context, pool *db.Pool, feeds []config.FeedConfig) ([]d
 	}
 	slog.Info("collect done", "articles", len(all))
 	return all, nil
+}
+
+func buildAllowedSources(feeds []config.FeedConfig) map[string]struct{} {
+	allowed := make(map[string]struct{}, len(feeds))
+	for _, f := range feeds {
+		// Generic Google News topic feeds are collection helpers, not media brands.
+		// Only feeds with a canonical source count as a target media source.
+		if f.Type == "google-news" && f.CanonicalSource == "" {
+			continue
+		}
+
+		source := f.Name
+		if f.CanonicalSource != "" {
+			source = f.CanonicalSource
+		}
+		if source == "" {
+			continue
+		}
+		allowed[source] = struct{}{}
+	}
+	return allowed
 }

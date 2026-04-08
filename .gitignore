@@ -43,3 +43,6 @@ next-env.d.ts
 # Prisma generated client
 src/generated/
 .idea/
+
+# go
+.gocache/

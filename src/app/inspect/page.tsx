@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { NewsGroup } from "@/types";
-import type { SnapshotMeta, FeedGroupWithItems } from "@/lib/db";
+import type { SnapshotMeta, FeedGroupWithItems, GroupInspectDetail } from "@/lib/db";
 
 type Tab = "feed" | "snapshot";
 
@@ -34,6 +34,21 @@ function SourceBadge({ count }: { count: number }) {
   );
 }
 
+const SEVERITY_CLS: Record<string, string> = {
+  high:   "bg-red-50 text-red-700 border-red-200",
+  medium: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  low:    "bg-gray-50 text-gray-500 border-gray-200",
+};
+
+function IssueBadge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 shrink-0">
+      警告{count}
+    </span>
+  );
+}
+
 export default function InspectPage() {
   const [tab, setTab] = useState<Tab>("feed");
 
@@ -48,6 +63,9 @@ export default function InspectPage() {
 
   const [expandedFeed, setExpandedFeed] = useState<Set<string>>(new Set());
   const [expandedSnap, setExpandedSnap] = useState<Set<string>>(new Set());
+
+  // groupId → inspect detail（lazy fetch）
+  const [inspectCache, setInspectCache] = useState<Map<string, GroupInspectDetail | null>>(new Map());
 
   useEffect(() => {
     setFeedLoading(true);
@@ -81,10 +99,25 @@ export default function InspectPage() {
     });
   }
 
-  function toggleSnap(id: string) {
+  function toggleSnap(groupId: string, snapshotId: string) {
     setExpandedSnap((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+        // キャッシュ済みでなければ fetch
+        if (!inspectCache.has(groupId)) {
+          fetch(`/api/batch/inspect?snapshotId=${snapshotId}&groupId=${groupId}`)
+            .then((r) => r.json())
+            .then((d: GroupInspectDetail) => {
+              setInspectCache((c) => new Map(c).set(groupId, d));
+            })
+            .catch(() => {
+              setInspectCache((c) => new Map(c).set(groupId, null));
+            });
+        }
+      }
       return next;
     });
   }
@@ -141,7 +174,6 @@ export default function InspectPage() {
             )}
             {!feedLoading && !feedError && (
               <>
-                {/* サマリー */}
                 <div className="flex gap-4 mb-4 text-xs text-gray-500">
                   <span>グループ総数: <strong className="text-gray-800">{feedGroups.length}</strong></span>
                   <span>多媒体: <strong className="text-green-700">{multiOutletFeed}</strong></span>
@@ -236,14 +268,19 @@ export default function InspectPage() {
                 ) : (
                   <div className="space-y-1">
                     {snapshotGroups.map((g, i) => {
-                      const key = `${g.rank ?? i}-${g.groupTitle}`;
-                      const open = expandedSnap.has(key);
-                      const covered  = g.coveredBy   ?? [];
-                      const silent   = g.silentMedia  ?? [];
+                      const groupId = g.id ?? `${g.rank ?? i}-${g.groupTitle}`;
+                      const open    = expandedSnap.has(groupId);
+                      const detail  = inspectCache.get(groupId) ?? null;
+                      const covered = g.coveredBy  ?? [];
+                      const silent  = g.silentMedia ?? [];
+                      const issueCount = detail?.summary.issues.length ?? 0;
                       return (
-                        <div key={key} className={`rounded-lg border bg-white ${g.singleOutlet ? "opacity-60" : ""}`}>
+                        <div key={groupId} className={`rounded-lg border bg-white ${g.singleOutlet ? "opacity-60" : ""}`}>
                           <button
-                            onClick={() => toggleSnap(key)}
+                            onClick={() => snapshot && g.id
+                              ? toggleSnap(g.id, snapshot.id)
+                              : undefined
+                            }
                             className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
                           >
                             {g.rank != null && (
@@ -267,25 +304,68 @@ export default function InspectPage() {
                                 沈黙{silent.length}
                               </span>
                             )}
+                            <IssueBadge count={issueCount} />
                             <span className="text-gray-400 text-xs shrink-0">{open ? "▼" : "▶"}</span>
                           </button>
+
                           <div className={`ranking-expand ${open ? "open" : ""}`}>
-                            <div>
-                              <div className="border-t border-gray-100 px-3 py-2 space-y-2">
-                                {/* 媒体リスト */}
-                                {(covered.length > 0 || silent.length > 0) && (
-                                  <div className="flex flex-wrap gap-2 text-xs">
-                                    {covered.map((m) => (
-                                      <span key={m} className="bg-green-50 text-green-700 px-2 py-0.5 rounded">{m}</span>
-                                    ))}
-                                    {silent.map((m) => (
-                                      <span key={m} className="bg-gray-50 text-gray-400 px-2 py-0.5 rounded line-through">{m}</span>
-                                    ))}
-                                  </div>
-                                )}
-                                {/* 記事リスト */}
-                                <ul className="divide-y divide-gray-50">
-                                  {g.items.map((item, j) => (
+                            <div className="border-t border-gray-100">
+                              {/* ローディング */}
+                              {open && !detail && inspectCache.has(groupId) === false && (
+                                <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-400">
+                                  <div className="w-3 h-3 border border-gray-300 border-t-blue-400 rounded-full animate-spin" />
+                                  読み込み中…
+                                </div>
+                              )}
+                              {open && !inspectCache.has(groupId) && (
+                                <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-400">
+                                  <div className="w-3 h-3 border border-gray-300 border-t-blue-400 rounded-full animate-spin" />
+                                  読み込み中…
+                                </div>
+                              )}
+
+                              {/* Issues */}
+                              {detail && detail.summary.issues.length > 0 && (
+                                <div className="px-3 pt-2 space-y-1">
+                                  {detail.summary.issues.map((issue, k) => (
+                                    <div
+                                      key={k}
+                                      className={`text-xs px-2 py-1 rounded border ${SEVERITY_CLS[issue.severity] ?? SEVERITY_CLS.low}`}
+                                    >
+                                      {issue.message}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* カテゴリ内訳（混在時のみ） */}
+                              {detail && Object.keys(detail.summary.byCategory).length >= 2 && (
+                                <div className="px-3 pt-2 flex flex-wrap gap-1">
+                                  {Object.entries(detail.summary.byCategory).map(([cat, cnt]) => (
+                                    <span key={cat} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                      {cat} {cnt}件
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* 媒体リスト */}
+                              {(covered.length > 0 || silent.length > 0) && (
+                                <div className="flex flex-wrap gap-2 px-3 pt-2 text-xs">
+                                  {covered.map((m) => (
+                                    <span key={m} className="bg-green-50 text-green-700 px-2 py-0.5 rounded">{m}</span>
+                                  ))}
+                                  {silent.map((m) => (
+                                    <span key={m} className="bg-gray-50 text-gray-400 px-2 py-0.5 rounded line-through">{m}</span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* 記事リスト（inspect detail があれば category も表示） */}
+                              <ul className="px-3 pt-2 pb-2 divide-y divide-gray-50">
+                                {(detail?.articles ?? g.items).map((item, j) => {
+                                  const cat = "category" in item ? item.category : null;
+                                  return (
                                     <li key={j} className="flex items-start gap-2 py-1.5">
                                       <span className="text-xs font-semibold text-gray-500 shrink-0 w-24 truncate">{item.source}</span>
                                       <a
@@ -296,13 +376,18 @@ export default function InspectPage() {
                                       >
                                         {item.title}
                                       </a>
+                                      {cat && (
+                                        <span className="text-[10px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded shrink-0">
+                                          {cat}
+                                        </span>
+                                      )}
                                       <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
                                         {item.publishedAt ? formatRelative(item.publishedAt) : "—"}
                                       </span>
                                     </li>
-                                  ))}
-                                </ul>
-                              </div>
+                                  );
+                                })}
+                              </ul>
                             </div>
                           </div>
                         </div>
