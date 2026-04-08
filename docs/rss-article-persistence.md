@@ -1,89 +1,102 @@
 # RSS記事永続化仕様
 
-## 概要
+## 現状
 
-RSSフィードから取得した記事をPostgreSQLに保存し、3日間のスライディングウィンドウでグルーピングに利用する。保持期間は3ヶ月。
+RSS 由来の記事は `rss_articles` に保存している。  
+保持期間は 3 ヶ月、グルーピング用の参照窓は主に直近 3 日。
+
+現在は **Next.js 側の `src/lib/db.ts` と Go バッチ側の両方** が `rss_articles` を触る。
+
+---
 
 ## データモデル
 
-```prisma
-model RssArticle {
-  id          String    @id @default(cuid())
-  url         String    @unique        // 重複排除キー
-  title       String
-  source      String
-  summary     String?
-  imageUrl    String?
-  publishedAt DateTime?
-  topic       String?                  // LLM分類カテゴリ
-  subcategory String?                  // LLM分類サブカテゴリ
-  fetchedAt   DateTime  @default(now()) // 保存日時（保持期限の基準）
-}
-```
+Prisma 論理名は `RssArticle`、物理テーブル名は `rss_articles`。
 
-## 保存フロー
+主な列:
 
-```
-fetchAllDefaultFeeds()
-  └─ RSS取得 + Newsdata取得
-  └─ 重複排除・ソート
-  └─ LLM一括分類（topic / subcategory 付与）
-  └─ upsertRssArticles() ← fire-and-forget（非同期・エラー無視）
-```
+- `url`
+- `title`
+- `source`
+- `summary`
+- `image_url`
+- `published_at`
+- `category`
+- `subcategory`
+- `fetched_at`
+- `embedded_at`
+- `classified_at`
+- `embedding`
 
-`upsertRssArticles` は `fetchAllDefaultFeeds` の戻り値に影響しない。DB保存の失敗はログのみ。
+---
 
-## Upsert仕様
+## Next.js 側の upsert
 
-**実装**: `src/lib/db.ts` — `upsertRssArticles(items: RssFeedItem[])`
+[db.ts](/Users/mk/Development/NewsPrismView/news-prism-view/src/lib/db.ts) に `upsertRssArticles()` がある。
+
+挙動:
 
 - URLが空の記事はスキップ
-- 50件単位でチャンク分割してバッチINSERT（N+1回避）
-- `ON CONFLICT (url) DO UPDATE` で重複URLは更新のみ
-  - `topic` / `subcategory`: 既存値があれば維持（COALESCE）
-  - `fetchedAt`: 常に現在時刻で更新
+- 50件単位で chunk INSERT
+- `ON CONFLICT (url) DO UPDATE`
+- `category` / `subcategory` は `COALESCE` で既存値優先
+- `fetched_at` は更新
+
+概念的には次の SQL。
 
 ```sql
-INSERT INTO "RssArticle" (id, url, title, source, summary, "imageUrl", "publishedAt", topic, subcategory, "fetchedAt")
+INSERT INTO rss_articles (
+  id, url, title, source, summary, image_url, published_at, category, subcategory, fetched_at
+)
 VALUES (...)
 ON CONFLICT (url) DO UPDATE SET
-  topic       = COALESCE(EXCLUDED.topic, "RssArticle".topic),
-  subcategory = COALESCE(EXCLUDED.subcategory, "RssArticle".subcategory),
-  "fetchedAt" = NOW()
+  category    = COALESCE(EXCLUDED.category, rss_articles.category),
+  subcategory = COALESCE(EXCLUDED.subcategory, rss_articles.subcategory),
+  fetched_at  = NOW();
 ```
+
+---
 
 ## 読み出し
 
-**実装**: `src/lib/db.ts` — `getRssArticlesSince(since: Date)`
+Next.js 側には次がある。
 
-- `fetchedAt >= since` の記事を `publishedAt DESC` で返す
-- 戻り値は `RssFeedItem[]`（フロント型と統一）
+- `getRssArticlesSince()`
+- `getRssArticlesBetween()`
 
-利用箇所: `src/app/api/rss/group/route.ts`
-- リクエスト時に過去3日分をDBから取得し、クライアント送信記事とマージ
-- URLで重複排除後、インクリメンタルグループ化に投入
+いずれも `rss_articles` から `RssFeedItem[]` 相当を返す。
 
-## 保持期限・クリーンアップ
+---
 
-**実装**: `src/lib/db.ts` — `deleteStaleRssArticles()`
+## クリーンアップ
+
+`deleteStaleRssArticles()` は実装済み。
 
 ```sql
-DELETE FROM "RssArticle" WHERE "fetchedAt" < NOW() - INTERVAL '3 months'
+DELETE FROM rss_articles
+WHERE fetched_at < NOW() - INTERVAL '3 months'
 ```
 
-呼び出し元: `src/app/api/rss/group/route.ts` — グループ化リクエスト時に fire-and-forget で実行
+---
 
-## グルーピングとの関係
+## Go バッチ側
 
-`src/app/api/rss/group/route.ts` のウィンドウは **3日**（`WINDOW_MS = 3 * 24 * 60 * 60 * 1000`）。
+Go バッチも `rss_articles` に upsert する。
 
-```
-POST /api/rss/group
-  1. DBから過去3日分取得 (getRssArticlesSince)
-  2. リクエストbodyのitemsとマージ（URLで重複排除）
-  3. incrementalGroupArticles() でクラスタリング
-  4. deleteStaleRssArticles() を非同期で実行
-  5. groups を返す
-```
+現在の役割:
 
-DBが空（初回起動時等）でもリクエストbodyのitemsだけでグループ化できる。
+- collect: 記事取得と保存
+- embed: `embedded_at` / `embedding`
+- classify: `category` / `subcategory` / `classified_at`
+- group: 直近記事を読み出して snapshot 生成
+
+さらに現在は、主要媒体として定義されていない `source` を保存しない。
+
+---
+
+## 現在の結論
+
+- `rss_articles` は共通の作業テーブル
+- Next.js と Go バッチの両方が触る
+- 物理名は `snake_case`
+- `topic` ベースの古い説明はもう使わない
