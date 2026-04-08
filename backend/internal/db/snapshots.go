@@ -54,7 +54,7 @@ func SaveSnapshot(ctx context.Context, pool *pgxpool.Pool, snap Snapshot) (strin
 
 	var id string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO "ProcessedSnapshot" ("articleCount", "groupCount", "durationMs", status, error)
+		INSERT INTO processed_snapshots (article_count, group_count, duration_ms, status, error)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id`,
 		snap.ArticleCount, snap.GroupCount, snap.DurationMs, snap.Status, nullStr(snap.Error),
@@ -68,7 +68,7 @@ func SaveSnapshot(ctx context.Context, pool *pgxpool.Pool, snap Snapshot) (strin
 		silentJSON, _ := json.Marshal(g.SilentMedia)
 		var gid string
 		err = tx.QueryRow(ctx, `
-			INSERT INTO "SnapshotGroup" ("snapshotId", "groupTitle", category, subcategory, rank, "singleOutlet", "coveredBy", "silentMedia")
+			INSERT INTO snapshot_groups (snapshot_id, group_title, category, subcategory, rank, single_outlet, covered_by, silent_media)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			RETURNING id`,
 			id, g.GroupTitle, nullStr(g.Category), nullStr(g.Subcategory),
@@ -80,7 +80,7 @@ func SaveSnapshot(ctx context.Context, pool *pgxpool.Pool, snap Snapshot) (strin
 
 		for _, item := range g.Items {
 			_, err = tx.Exec(ctx, `
-				INSERT INTO "SnapshotGroupItem" ("groupId", title, url, source, summary, "publishedAt", category, subcategory)
+				INSERT INTO snapshot_group_items (group_id, title, url, source, summary, published_at, category, subcategory)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 				gid, item.Title, item.URL, item.Source,
 				nullStr(item.Summary), nullStr(item.PublishedAt),
@@ -93,7 +93,7 @@ func SaveSnapshot(ctx context.Context, pool *pgxpool.Pool, snap Snapshot) (strin
 	}
 
 	// 7日以上前のスナップショットを削除
-	tx.Exec(ctx, `DELETE FROM "ProcessedSnapshot" WHERE "processedAt" < NOW() - INTERVAL '7 days'`)
+	tx.Exec(ctx, `DELETE FROM processed_snapshots WHERE processed_at < NOW() - INTERVAL '7 days'`)
 
 	return id, tx.Commit(ctx)
 }
@@ -101,10 +101,10 @@ func SaveSnapshot(ctx context.Context, pool *pgxpool.Pool, snap Snapshot) (strin
 func GetLatestSnapshot(ctx context.Context, pool *pgxpool.Pool) (*Snapshot, error) {
 	var snap Snapshot
 	err := pool.QueryRow(ctx, `
-		SELECT id, "processedAt", "articleCount", "groupCount", "durationMs", status, COALESCE(error,'')
-		FROM "ProcessedSnapshot"
+		SELECT id, processed_at, article_count, group_count, duration_ms, status, COALESCE(error,'')
+		FROM processed_snapshots
 		WHERE status != 'failed'
-		ORDER BY "processedAt" DESC
+		ORDER BY processed_at DESC
 		LIMIT 1`,
 	).Scan(&snap.ID, &snap.ProcessedAt, &snap.ArticleCount, &snap.GroupCount, &snap.DurationMs, &snap.Status, &snap.Error)
 	if err != nil {

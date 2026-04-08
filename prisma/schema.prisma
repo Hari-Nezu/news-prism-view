@@ -9,217 +9,210 @@ datasource db {
 
 /// 分析済み記事（メインページ）
 model Article {
-  id             String   @id @default(cuid())
+  id             String                 @id(map: "Article_pkey") @default(cuid())
   title          String
   content        String
   url            String?
   source         String?
-  publishedAt    String?
-  analyzedAt     DateTime @default(now())
-
-  // 3軸スコア
+  publishedAt    String?                @map("published_at")
+  analyzedAt     DateTime               @default(now()) @map("analyzed_at")
   economic       Float
   social         Float
   diplomatic     Float
-  emotionalTone  Float
-  biasWarning    Boolean
+  emotionalTone  Float                  @map("emotional_tone")
+  biasWarning    Boolean                @map("bias_warning")
   confidence     Float
   summary        String
-  counterOpinion String
-
+  counterOpinion String                 @map("counter_opinion")
   category       String?
   subcategory    String?
+  embedding      Unsupported("vector")?
 
-  // 埋め込みベクトル（ruri-v3-310m = 768次元）
-  // Prisma未対応型のため INSERT/SELECT は生SQL で処理
-  embedding      Unsupported("vector(768)")?
-
-  @@index([url])
-  @@index([analyzedAt(sort: Desc)])
+  @@index([analyzedAt(sort: Desc)], map: "Article_analyzedAt_idx")
+  @@index([url], map: "Article_url_idx")
+  @@map("articles")
 }
 
 /// RSSフィードから取得した生記事（永続化・重複排除用）
 model RssArticle {
-  id           String    @id @default(cuid())
-  url          String    @unique
+  id           String                 @id(map: "RssArticle_pkey") @default(cuid())
+  url          String                 @unique(map: "RssArticle_url_key")
   title        String
   source       String
   summary      String?
-  imageUrl     String?
-  publishedAt  DateTime?
+  imageUrl     String?                @map("image_url")
+  publishedAt  DateTime?              @map("published_at")
   category     String?
   subcategory  String?
-  fetchedAt    DateTime  @default(now())
-  embeddedAt   DateTime?
-  classifiedAt DateTime?
-  embedding    Unsupported("vector(768)")?
+  fetchedAt    DateTime               @default(now()) @map("fetched_at")
+  embeddedAt   DateTime?              @map("embedded_at") @db.Timestamptz(6)
+  classifiedAt DateTime?              @map("classified_at") @db.Timestamptz(6)
+  embedding    Unsupported("vector")?
 
-  @@index([fetchedAt(sort: Desc)])
-  @@index([publishedAt(sort: Desc)])
+  @@index([fetchedAt(sort: Desc)], map: "RssArticle_fetchedAt_idx")
+  @@index([publishedAt(sort: Desc)], map: "RssArticle_publishedAt_idx")
+  @@map("rss_articles")
 }
 
 /// RSSフィードのニュースイベントグループ（インクリメンタルグループ化用）
 model FeedGroup {
-  id           String          @id @default(cuid())
+  id           String                 @id(map: "FeedGroup_pkey") @default(cuid())
   title        String
-  articleCount Int             @default(0)
-  lastSeenAt   DateTime        @default(now())
-  createdAt    DateTime        @default(now())
-  embedding    Unsupported("vector(768)")?
+  articleCount Int                    @default(0) @map("article_count")
+  lastSeenAt   DateTime               @default(now()) @map("last_seen_at")
+  createdAt    DateTime               @default(now()) @map("created_at")
+  embedding    Unsupported("vector")?
   items        FeedGroupItem[]
 
-  @@index([lastSeenAt(sort: Desc)])
+  @@index([lastSeenAt(sort: Desc)], map: "FeedGroup_lastSeenAt_idx")
+  @@map("feed_groups")
 }
 
 /// FeedGroup に属する記事（重複防止・centroid更新用）
 model FeedGroupItem {
-  id          String    @id @default(cuid())
-  group       FeedGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  groupId     String
+  id          String    @id(map: "FeedGroupItem_pkey") @default(cuid())
+  groupId     String    @map("group_id")
   title       String
   url         String
   source      String
-  publishedAt String?
-  matchedAt   DateTime  @default(now())
+  publishedAt String?   @map("published_at")
+  matchedAt   DateTime  @default(now()) @map("matched_at")
+  group       FeedGroup @relation(fields: [groupId], references: [id], onDelete: Cascade, map: "FeedGroupItem_groupId_fkey")
 
-  @@unique([groupId, url])
-  @@index([url])
+  @@unique([groupId, url], map: "FeedGroupItem_groupId_url_key")
+  @@index([url], map: "FeedGroupItem_url_idx")
+  @@map("feed_group_items")
 }
 
 /// Goバッチパイプラインの実行結果スナップショット
 model ProcessedSnapshot {
-  id           String          @id @default(cuid())
-  processedAt  DateTime        @default(now())
-  articleCount Int
-  groupCount   Int
-  durationMs   Int
-  status       String          // 'success' | 'partial' | 'failed'
+  id           String          @id(map: "ProcessedSnapshot_pkey") @default(dbgenerated("(gen_random_uuid())::text"))
+  processedAt  DateTime        @default(now()) @map("processed_at") @db.Timestamptz(6)
+  articleCount Int             @map("article_count")
+  groupCount   Int             @map("group_count")
+  durationMs   Int             @map("duration_ms")
+  status       String
   error        String?
   groups       SnapshotGroup[]
 
-  @@index([processedAt(sort: Desc)])
+  @@index([processedAt(sort: Desc)], map: "idx_snapshot_processed")
+  @@map("processed_snapshots")
 }
 
 /// スナップショット内のニュースグループ
 model SnapshotGroup {
-  id           String               @id @default(cuid())
-  snapshot     ProcessedSnapshot    @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
-  snapshotId   String
-  groupTitle   String
+  id           String              @id(map: "SnapshotGroup_pkey") @default(dbgenerated("(gen_random_uuid())::text"))
+  snapshotId   String              @map("snapshot_id")
+  groupTitle   String              @map("group_title")
   category     String?
   subcategory  String?
   rank         Int
-  singleOutlet Boolean
-  coveredBy    Json?                // string[]
-  silentMedia  Json?                // string[]
+  singleOutlet Boolean             @map("single_outlet")
+  coveredBy    Json?               @map("covered_by")
+  silentMedia  Json?               @map("silent_media")
   items        SnapshotGroupItem[]
+  snapshot     ProcessedSnapshot   @relation(fields: [snapshotId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "SnapshotGroup_snapshotId_fkey")
 
-  @@index([snapshotId])
+  @@index([snapshotId], map: "idx_sg_snapshot")
+  @@map("snapshot_groups")
 }
 
 /// グループ内の記事
 model SnapshotGroupItem {
-  id          String        @id @default(cuid())
-  group       SnapshotGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  groupId     String
+  id          String        @id(map: "SnapshotGroupItem_pkey") @default(dbgenerated("(gen_random_uuid())::text"))
+  groupId     String        @map("group_id")
   title       String
   url         String
   source      String
   summary     String?
-  publishedAt String?
+  publishedAt String?       @map("published_at")
   category    String?
   subcategory String?
+  group       SnapshotGroup @relation(fields: [groupId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "SnapshotGroupItem_groupId_fkey")
 
-  @@index([groupId])
+  @@index([groupId], map: "idx_sgi_group")
+  @@map("snapshot_group_items")
 }
 
 /// メディア比較セッション（比較ページ）
 model CompareSession {
-  id      String   @id @default(cuid())
-  keyword String
-  savedAt DateTime @default(now())
-
-  // NewsGroup[] を JSON で保存
-  groups  Json
-
-  results    CompareResult[]
+  id         String               @id(map: "CompareSession_pkey") @default(cuid())
+  keyword    String
+  savedAt    DateTime             @default(now()) @map("saved_at")
+  groups     Json
   newsGroups CompareGroupRecord[]
+  results    CompareResult[]
 
-  @@index([savedAt(sort: Desc)])
+  @@index([savedAt(sort: Desc)], map: "CompareSession_savedAt_idx")
+  @@map("compare_sessions")
 }
 
 /// グループ化されたニュースイベント（ベクトル検索用）
 model CompareGroupRecord {
-  id           String         @id @default(cuid())
-  session      CompareSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  sessionId    String
-
-  groupTitle   String
-  singleOutlet Boolean
-  itemCount    Int
+  id           String                 @id(map: "CompareGroupRecord_pkey") @default(cuid())
+  sessionId    String                 @map("session_id")
+  groupTitle   String                 @map("group_title")
+  singleOutlet Boolean                @map("single_outlet")
+  itemCount    Int                    @map("item_count")
   /// 参加媒体名の配列を JSON で保存
   sources      Json
+  savedAt      DateTime               @default(now()) @map("saved_at")
+  embedding    Unsupported("vector")?
+  session      CompareSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "CompareGroupRecord_sessionId_fkey")
 
-  savedAt      DateTime @default(now())
-
-  // 埋め込みベクトル（グループタイトル + 記事タイトル群 + 媒体名）
-  embedding    Unsupported("vector(768)")?
-
-  @@index([savedAt(sort: Desc)])
+  @@index([savedAt(sort: Desc)], map: "CompareGroupRecord_savedAt_idx")
+  @@map("compare_group_records")
 }
 
 /// YouTube 動画の字幕分析結果
 model YouTubeVideo {
-  id             String   @id @default(cuid())
-  videoId        String   @unique       // YouTube video ID (11文字)
+  id             String                 @id(map: "YouTubeVideo_pkey") @default(cuid())
+  videoId        String                 @unique(map: "YouTubeVideo_videoId_key") @map("video_id")
   title          String
-  channelName    String
-  channelId      String                 // YouTube channel ID (UC...)
+  channelName    String                 @map("channel_name")
+  channelId      String                 @map("channel_id")
   description    String?
-  thumbnailUrl   String?
-  publishedAt    String?
-  transcript     String                 // 分析に使用したテキスト（字幕 or description）
-  transcriptType String   @default("transcript") // "transcript" | "description"
-  analyzedAt     DateTime @default(now())
-
+  thumbnailUrl   String?                @map("thumbnail_url")
+  publishedAt    String?                @map("published_at")
+  transcript     String
+  transcriptType String                 @default("transcript") @map("transcript_type")
+  analyzedAt     DateTime               @default(now()) @map("analyzed_at")
   economic       Float
   social         Float
   diplomatic     Float
-  emotionalTone  Float
-  biasWarning    Boolean
+  emotionalTone  Float                  @map("emotional_tone")
+  biasWarning    Boolean                @map("bias_warning")
   confidence     Float
   summary        String
-  counterOpinion String
-
+  counterOpinion String                 @map("counter_opinion")
   category       String?
   subcategory    String?
+  embedding      Unsupported("vector")?
 
-  embedding      Unsupported("vector(768)")?
-
-  @@index([channelId])
-  @@index([analyzedAt(sort: Desc)])
+  @@index([analyzedAt(sort: Desc)], map: "YouTubeVideo_analyzedAt_idx")
+  @@index([channelId], map: "YouTubeVideo_channelId_idx")
+  @@map("youtube_videos")
 }
 
 /// 比較セッション内の各媒体分析結果
 model CompareResult {
-  id             String         @id @default(cuid())
-  session        CompareSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  sessionId      String
-
+  id             String                 @id(map: "CompareResult_pkey") @default(cuid())
+  sessionId      String                 @map("session_id")
   title          String
   url            String?
   source         String?
-  publishedAt    String?
-  analyzedAt     DateTime       @default(now())
-
+  publishedAt    String?                @map("published_at")
+  analyzedAt     DateTime               @default(now()) @map("analyzed_at")
   economic       Float
   social         Float
   diplomatic     Float
-  emotionalTone  Float
-  biasWarning    Boolean
+  emotionalTone  Float                  @map("emotional_tone")
+  biasWarning    Boolean                @map("bias_warning")
   confidence     Float
   summary        String
-  counterOpinion String
+  counterOpinion String                 @map("counter_opinion")
+  embedding      Unsupported("vector")?
+  session        CompareSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "CompareResult_sessionId_fkey")
 
-  embedding      Unsupported("vector(768)")?
+  @@map("compare_results")
 }
