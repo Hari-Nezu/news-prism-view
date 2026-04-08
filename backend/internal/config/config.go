@@ -8,6 +8,7 @@ import (
 type Config struct {
 	DatabaseURL            string
 	LLMBaseURL             string
+	EmbedBaseURL           string
 	LLMModel               string
 	ClassifyModel          string
 	EmbedModel             string
@@ -21,7 +22,8 @@ type Config struct {
 func Load() Config {
 	return Config{
 		DatabaseURL:            getEnv("DATABASE_URL", "postgresql://newsprism:newsprism@localhost:5432/newsprism"),
-		LLMBaseURL:             getEnv("LLM_BASE_URL", "http://localhost:8081"),
+		LLMBaseURL:             getEnv("LLM_BASE_URL", "http://127.0.0.1:8081"),
+		EmbedBaseURL:           getEnv("EMBED_BASE_URL", "http://127.0.0.1:8081"),
 		LLMModel:               getEnv("LLM_MODEL", "gemma-4-E4B-it-Q8_0"),
 		ClassifyModel:          getEnv("CLASSIFY_MODEL", "gemma-4-E4B-it-Q8_0"),
 		EmbedModel:             getEnv("EMBED_MODEL", "Targoyle/ruri-v3-310m-GGUF:Q8_0"),

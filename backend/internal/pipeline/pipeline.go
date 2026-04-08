@@ -33,7 +33,7 @@ func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.F
 	}
 	defer db.ReleasePipelineLock(ctx, pool)
 
-	embedClient := llm.NewEmbedClient(cfg.LLMBaseURL, cfg.EmbedModel)
+	embedClient := llm.NewEmbedClient(cfg.EmbedBaseURL, cfg.EmbedModel)
 	chatClient := llm.NewChatClient(cfg.LLMBaseURL, cfg.LLMModel)
 
 	// 1. collect
