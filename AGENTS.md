@@ -37,6 +37,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 - `tailwind.config.js` は **不要・生成禁止** → `globals.css` の `@import "tailwindcss"` で完結
 
+## Go backend
+
+- Go のビルドキャッシュは repo 内の `.gocache/` を使ってよい
+- `.gocache/` は `.gitignore` 対象
+- `backend` 配下で Go コマンドを実行する時は `GOCACHE=../.gocache` か `GOCACHE=/abs/path/.gocache` を使うと安全
+
 ## 3軸スコアリング定義
 
 | 軸 | -1.0 | +1.0 |

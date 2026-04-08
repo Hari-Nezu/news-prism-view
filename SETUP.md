@@ -29,7 +29,7 @@ docker compose up
 ```bash
 # 事前に以下のモデルが pull されていること
 ollama pull llama3.2
-ollama pull nomic-embed-text
+ollama pull ruri-v3-310m
 
 docker compose -f docker-compose.local-ollama.yml up
 ```
@@ -43,7 +43,7 @@ docker compose -f docker-compose.local-ollama.yml up
 docker compose up db ollama ollama-init
 
 # アプリをローカルで起動
-cp .env.local.example .env.local
+cp .env.local.sample .env.local
 npx prisma db push
 npm run dev
 ```
@@ -52,17 +52,34 @@ npm run dev
 
 ## 環境変数
 
-`.env.local.example` をコピーして `.env.local` を作成してください。
+`.env.local.sample` をコピーして `.env.local` を作成してください。
 
 ```bash
-cp .env.local.example .env.local
+cp .env.local.sample .env.local
 ```
+
+### Ollama / モデル
 
 | 変数 | デフォルト | 説明 |
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama サーバーの URL |
-| `OLLAMA_MODEL` | `llama3.2` | 分析に使う LLM モデル |
-| `EMBED_MODEL` | `nomic-embed-text` | 類似記事検索用の埋め込みモデル |
+| `OLLAMA_MODEL` | `gemma3:12b` | 3軸政治分析に使う LLM |
+| `CLASSIFY_MODEL` | `gemma3:4b` | ニュースカテゴリ分類に使う LLM |
+| `EMBED_MODEL` | `mxbai-embed-large` | テキスト埋め込みモデル（出力次元 768） |
+| `MULTI_MODELS` | `gemma3:12b,qwen3.5:4b,llama3.2` | マルチモデル分析モード用モデル一覧（カンマ区切り） |
+
+### 類似度閾値
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
+| `GROUP_CLUSTER_THRESHOLD` | `0.72` | バッチグループ化でのクラスタリング閾値（高いほど厳密） |
+| `FEED_GROUP_SIMILARITY_THRESHOLD` | `0.68` | インクリメンタルグループ化でのマッチング閾値 |
+| `EMBED_CLASSIFY_THRESHOLD` | `0.5` | embedding 分類の confidence 閾値（未満は LLM にエスカレーション） |
+
+### その他
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
 | `DATABASE_URL` | `postgresql://...` | PostgreSQL 接続文字列 |
 | `NEWSDATA_API_KEY` | （空） | [NewsData.io](https://newsdata.io/) の API キー（任意） |
 
@@ -72,9 +89,9 @@ cp .env.local.example .env.local
 
 | モデル | VRAM目安 | 特徴 |
 |---|---|---|
-| `llama3.2` | ~2GB | 速い・軽い（デフォルト） |
-| `gemma3:12b` | ~8GB | 日本語が強い・バランス良好 |
-| `llama3.1:8b` | ~5GB | 英語が強い |
+| `llama3.2` | ~2GB | 速い・軽い |
+| `gemma3:4b` | ~3GB | 日本語対応・軽量 |
+| `gemma3:12b` | ~8GB | 日本語が強い・バランス良好（デフォルト） |
 
 ```bash
 # モデルをダウンロードして切り替える例

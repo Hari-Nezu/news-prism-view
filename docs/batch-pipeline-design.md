@@ -2,7 +2,8 @@
 
 ## 背景・動機
 
-現状は全処理（RSS取得 → embedding → LLMグループ命名 → 分類）がリクエスト時にオンデマンド実行される。
+現状は、ランキング用の集計処理を Go バッチへ移し、Next.js はスナップショットの読み取りを担当している。  
+一方で、個別記事分析や比較などの一部機能は引き続き Next.js 側のオンデマンド処理で残っている。
 
 **問題点:**
 - ページ表示のたびに15社RSS取得 + embedding + LLM呼び出しが走る（数十秒〜数分）
@@ -30,7 +31,7 @@
 │                                              │
 │  ┌─────────────────────────────────────────┐ │
 │  │ collect → embed → classify → group →    │ │
-│  │   name → dedup → store                  │ │
+│  │   name → store                          │ │
 │  └─────────────────────────────────────────┘ │
 └──────────────────────┬───────────────────────┘
                        │ pgx
@@ -59,12 +60,12 @@
 
 | 用途 | ライブラリ | 理由 |
 |------|-----------|------|
-| HTTP | `net/http` + `go-chi/chi/v5` | 軽量、stdlib準拠 |
+| HTTP | `net/http` | 現状は `ServeMux` で十分 |
 | DB | `jackc/pgx/v5` | PostgreSQL最速ドライバ |
 | pgvector | `pgvector/pgvector-go` | `pgx` 統合済み |
 | RSS | `mmcdole/gofeed` | 最も成熟した Go RSS パーサー |
 | cron | `robfig/cron/v3` | `serve` モード用の内蔵スケジューラ |
-| CLI | `spf13/cobra` or 標準 `flag` | サブコマンド管理 |
+| CLI | `os.Args` + 標準処理 | 現状は `run` / `serve` の2コマンドのみ |
 | 設定 | 環境変数 + YAML | フィード定義は YAML 共有ファイル |
 | ログ | `log/slog` | Go 1.21+ 標準の構造化ログ |
 
@@ -90,13 +91,11 @@ backend/
 │   │   ├── pipeline.go          — オーケストレータ
 │   │   ├── collect.go           — RSS 収集
 │   │   ├── embed.go             — バッチ embedding
-│   │   ├── classify.go          — LLM 分類（embedding → LLM カスケード）
+│   │   ├── classify.go          — キーワード分類
 │   │   ├── group.go             — グリーディクラスタリング
 │   │   ├── name.go              — LLM グループ命名
-│   │   ├── dedup.go             — embedding 類似度重複除去
 │   │   └── store.go             — スナップショット保存
 │   ├── llm/
-│   │   ├── client.go            — llama.cpp OpenAI互換 HTTP クライアント
 │   │   ├── embed.go             — /v1/embeddings ラッパー
 │   │   └── chat.go              — /v1/chat/completions ラッパー
 │   └── rss/
@@ -112,11 +111,11 @@ backend/
 ## パイプライン概要
 
 ```
-[cron / CLI] → collect → embed → classify → group → name → dedup → store
-                 ↓                                                   ↓
-              RssArticle                                       ProcessedSnapshot
-              (embedding保存)                                  ├─ SnapshotGroup
-                                                               └─ SnapshotGroupItem
+[cron / CLI] → collect → embed → classify → group → name → store
+                 ↓                                           ↓
+              rss_articles                             processed_snapshots
+              (embedding保存)                            ├─ snapshot_groups
+                                                         └─ snapshot_group_items
 ```
 
 ### ステージ
@@ -125,11 +124,10 @@ backend/
 |---|---------|---------|-----------|---------|
 | 1 | **collect** | 全フィード RSS 並行取得、RssArticle upsert | goroutine × フィード数 | ~5s |
 | 2 | **embed** | embedding 未計算記事のバッチ embedding | バッチAPI 1回（llama.cpp が並行処理） | ~20s/100件 |
-| 3 | **classify** | category/subcategory 未分類記事の分類 | embedding分類は Go 内で完結、LLM フォールバックのみ API | ~30s/100件 |
+| 3 | **classify** | category/subcategory 未分類記事の分類 | Go 内でキーワード分類 | ~1s |
 | 4 | **group** | embedding コサイン類似度クラスタリング | Go 内で完結（CPU） | ~1s |
 | 5 | **name** | LLM グループ命名 | 1回の API 呼び出し | ~10s |
-| 6 | **dedup** | cosine > 0.95 の重複記事を除去 | Go 内で完結（CPU） | <1s |
-| 7 | **store** | スナップショット保存 + 古いスナップショット削除 | トランザクション 1回 | ~2s |
+| 6 | **store** | スナップショット保存 + 古いスナップショット削除 | トランザクション 1回 | ~2s |
 
 合計: 1回あたり約1分（記事100件想定、collect の goroutine 並行で短縮）
 
@@ -137,7 +135,8 @@ backend/
 
 ## フィード定義の共有
 
-TypeScript の `feed-configs.ts` と Go の `feeds.yaml` を二重管理しないために YAML を正とする。
+現状は Go 側の `backend/feeds.yaml` がバッチ収集の正となっている。  
+Next.js 側には別途 `src/lib/config/feed-configs.ts` も存在するため、完全な単一ソース化はまだ未実施。
 
 ```yaml
 # backend/feeds.yaml
@@ -148,7 +147,7 @@ feeds:
     type: google-news
     category: 政治
     filter_political: false
-    default_enabled: true
+    default_enabled: false
 
   - id: nhk
     name: NHK
@@ -156,7 +155,7 @@ feeds:
     type: rss
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
 
   - id: yomiuri
     name: 読売新聞
@@ -164,73 +163,78 @@ feeds:
     type: google-news
     category: 総合
     filter_political: false
-    default_enabled: false
+    default_enabled: true
     canonical_source: 読売新聞
 
   # ... 他のフィードも同様
 ```
 
-Next.js 側の `feed-configs.ts` は YAML から自動生成するスクリプトを用意する（or フロント用は YAML を直接 fetch）。
+補足:
+
+- `Google News 政治` などのトピック feed は `default_enabled: false`
+- 主要媒体 15 社は `default_enabled: true`
+- Google News 経由の媒体 feed でも、収集後に `canonical_source` で主要媒体名へ正規化する
+- 収集段階で、主要媒体として定義されていない `source` は破棄する
 
 ---
 
 ## DBスキーマ
 
-### RssArticle 拡張（既存 + 追加カラム）
+### `rss_articles`
 
-既に `embedding vector(1024)` は追加済み。バッチ処理で以下を追加:
+`rss_articles` に embedding / 分類 / 取得時刻を保持する。
 
 ```sql
-ALTER TABLE "RssArticle" ADD COLUMN IF NOT EXISTS "embeddedAt" TIMESTAMPTZ;
-ALTER TABLE "RssArticle" ADD COLUMN IF NOT EXISTS "classifiedAt" TIMESTAMPTZ;
+ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS embedded_at TIMESTAMPTZ;
+ALTER TABLE rss_articles ADD COLUMN IF NOT EXISTS classified_at TIMESTAMPTZ;
 ```
 
-- `embeddedAt IS NULL` → embed 対象
-- `classifiedAt IS NULL` → classify 対象
+- `embedded_at IS NULL` → embed 対象
+- `classified_at IS NULL` → classify 対象
 
-### 新テーブル: ProcessedSnapshot
+### スナップショット系テーブル
 
 ```sql
-CREATE TABLE "ProcessedSnapshot" (
+CREATE TABLE processed_snapshots (
   id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  "processedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  "articleCount" INT NOT NULL,
-  "groupCount"   INT NOT NULL,
-  "durationMs"   INT NOT NULL,
+  processed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  article_count INT NOT NULL,
+  group_count   INT NOT NULL,
+  duration_ms   INT NOT NULL,
   status         TEXT NOT NULL,  -- 'success' | 'partial' | 'failed'
   error          TEXT
 );
-CREATE INDEX idx_snapshot_processed ON "ProcessedSnapshot" ("processedAt" DESC);
+CREATE INDEX idx_snapshot_processed ON processed_snapshots (processed_at DESC);
 
-CREATE TABLE "SnapshotGroup" (
+CREATE TABLE snapshot_groups (
   id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  "snapshotId"  TEXT NOT NULL REFERENCES "ProcessedSnapshot"(id) ON DELETE CASCADE,
-  "groupTitle"  TEXT NOT NULL,
+  snapshot_id   TEXT NOT NULL REFERENCES processed_snapshots(id) ON DELETE CASCADE,
+  group_title   TEXT NOT NULL,
   category      TEXT,
   subcategory   TEXT,
   rank          INT NOT NULL,
-  "singleOutlet" BOOLEAN NOT NULL,
-  "coveredBy"   JSONB,   -- string[]
-  "silentMedia" JSONB    -- string[]
+  single_outlet BOOLEAN NOT NULL,
+  covered_by    JSONB,   -- string[]
+  silent_media  JSONB    -- string[]
 );
-CREATE INDEX idx_sg_snapshot ON "SnapshotGroup" ("snapshotId");
+CREATE INDEX idx_sg_snapshot ON snapshot_groups (snapshot_id);
 
-CREATE TABLE "SnapshotGroupItem" (
+CREATE TABLE snapshot_group_items (
   id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  "groupId"   TEXT NOT NULL REFERENCES "SnapshotGroup"(id) ON DELETE CASCADE,
+  group_id    TEXT NOT NULL REFERENCES snapshot_groups(id) ON DELETE CASCADE,
   title       TEXT NOT NULL,
   url         TEXT NOT NULL,
   source      TEXT NOT NULL,
   summary     TEXT,
-  "publishedAt" TEXT,
+  published_at TEXT,
   category    TEXT,
   subcategory TEXT
 );
-CREATE INDEX idx_sgi_group ON "SnapshotGroupItem" ("groupId");
+CREATE INDEX idx_sgi_group ON snapshot_group_items (group_id);
 ```
 
-**注意**: Prisma スキーマにも追加し `prisma generate` を実行する（Next.js 読み取り用）。
-ただし Go は Prisma を使わず `pgx` で直接操作する。
+Prisma 側では論理名を `ProcessedSnapshot` / `SnapshotGroup` / `SnapshotGroupItem` に保ちつつ、物理名を `@@map` / `@map` で `snake_case` に寄せている。  
+Go 側は `pgx` で物理名を直接操作する。
 
 ---
 
@@ -277,21 +281,8 @@ BatchLock テーブルは不要。advisory lock はセッション終了（DB接
 HTTP サーバー + 内蔵 cron スケジューラとして常駐:
 
 ```
-POST /run          — パイプライン手動実行（Next.js の手動更新ボタンから）
-GET  /status       — 最新の実行結果サマリ
-GET  /health       — ヘルスチェック
-```
-
-```go
-c := cron.New()
-c.AddFunc("0 * * * *", func() { pipeline.Run(ctx) })
-c.Start()
-
-r := chi.NewRouter()
-r.Post("/run", handleRun)
-r.Get("/status", handleStatus)
-r.Get("/health", handleHealth)
-http.ListenAndServe(":8090", r)
+POST /run     — パイプライン手動実行（Next.js の手動更新ボタンから）
+GET  /health  — ヘルスチェック
 ```
 
 ---
@@ -316,7 +307,7 @@ GET /api/batch/history  — 履歴一覧
 BATCH_SERVER_URL=http://localhost:8090
 
 // ボタン押下時
-await fetch(`${process.env.NEXT_PUBLIC_BATCH_SERVER_URL}/run`, { method: "POST" });
+await fetch("/api/batch/run", { method: "POST" });
 ```
 
 ### 廃止する API Route
@@ -350,9 +341,9 @@ Phase B（スナップショット読み出しに切り替え後）:
 
 ---
 
-## Google News 固有ロジック（移植が必要）
+## Google News 固有ロジック（実装済み）
 
-Go の RSS パーサーで再実装する必要がある箇所:
+Go の RSS パーサーで実装済みの箇所:
 
 1. **`<source>` 要素から媒体名抽出**: `gofeed` の `Extensions` から取得
 2. **タイトル末尾の " - 媒体名" 除去**: 正規表現で strip
@@ -361,17 +352,13 @@ Go の RSS パーサーで再実装する必要がある箇所:
 
 ---
 
-## 分類カスケード（移植が必要）
+## 分類ステージ（現状）
 
-現在の TypeScript 実装:
-1. 参照 embedding を起動時に1回生成（サブカテゴリごとの文言をベクトル化）
-2. 記事 embedding とコサイン類似度で分類（CPU で完結）
-3. confidence < 0.5 の場合のみ LLM にフォールバック
+現状の Go バッチは、分類に LLM カスケードを使っていない。  
+`classify.go` でタイトルと要約に対するキーワード分類を行い、`category` のみを更新する。
 
-Go 移植のポイント:
-- 参照 embedding は DB or メモリにキャッシュ（Go はプロセスが長寿命なのでメモリキャッシュが有効）
-- コサイン類似度計算は Go で直書き（ライブラリ不要）
-- LLM フォールバックは `llm/chat.go` 経由
+- `subcategory` は現在は空文字のまま保存
+- embedding → LLM カスケードは将来改善項目
 
 ---
 
@@ -385,19 +372,24 @@ LLM_MODEL=ggml-org/gemma-4-E4B-it-Q8_0
 CLASSIFY_MODEL=ggml-org/gemma-4-E4B-it-Q8_0
 EMBED_MODEL=Targoyle/ruri-v3-310m-GGUF:Q8_0
 GROUP_CLUSTER_THRESHOLD=0.87
-FEED_GROUP_SIMILARITY_THRESHOLD=0.87
 EMBED_CLASSIFY_THRESHOLD=0.5
+TIME_DECAY_HALF_LIFE_HOURS=12
 BATCH_PORT=8090
+FEEDS_YAML_PATH=feeds.yaml
 ```
 
-Next.js の `src/lib/config/index.ts` と同じキーを使用。
+補足:
+
+- Go 側は `EMBED_BASE_URL` も受け取れる
+- `FEED_GROUP_SIMILARITY_THRESHOLD` は Go バッチでは未使用
 
 ---
 
 ## 注意事項
 
-- **スキーマ管理**: Prisma でマイグレーション（Next.js と DB スキーマを共有）。Go は pgx で直接操作
+- **スキーマ管理**: Prisma と Go migration が混在。Next.js は Prisma で読むが、Go は `pgx` で直接操作
 - **llama.cpp の起動前提**: embedding/LLM はローカルサーバーに依存。未起動時は `status: "partial"` で記録
 - **スナップショット保持期間**: 7日分を保持、それ以前は CASCADE 削除
 - **初回実行**: スナップショットが空の場合、UI はフォールバックとしてオンデマンドフローを使用（Phase A）
 - **SnapshotGroupItem.topic → category**: 3層 taxonomy リネーム済みに合わせて `category` / `subcategory` を使用
+- **対象媒体の制限**: バッチ収集では主要媒体として定義した `source` のみを保存し、未定義媒体や `Google News 政治` のような総称ソースは保存しない
