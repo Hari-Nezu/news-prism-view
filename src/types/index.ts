@@ -50,6 +50,7 @@ export interface NewsGroup {
   category?: string;         // グループ内の支配的大分類（"politics" | "economy" | ...）
   subcategory?: string;      // グループ内の支配的中分類
   // SnapshotGroup 由来フィールド（/inspect ページで使用）
+  id?:          string;
   rank?:        number;
   coveredBy?:   string[];
   silentMedia?: string[];

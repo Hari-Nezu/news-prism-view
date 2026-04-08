@@ -485,6 +485,110 @@ export async function getRssArticlesBetween(since: Date, until: Date, sources?: 
 
 // ── ProcessedSnapshot ─────────────────────────────────────
 
+export interface GroupIssue {
+  type: "cross_category_mismatch" | "no_category" | "subcategory_mismatch";
+  severity: "low" | "medium" | "high";
+  message: string;
+}
+
+export interface GroupInspectDetail {
+  snapshotId:   string;
+  groupId:      string;
+  groupTitle:   string;
+  category:     string | null;
+  subcategory:  string | null;
+  rank:         number;
+  singleOutlet: boolean;
+  coveredBy:    string[];
+  silentMedia:  string[];
+  articles: Array<{
+    title:       string;
+    url:         string;
+    source:      string;
+    publishedAt: string | null;
+    category:    string | null;
+    subcategory: string | null;
+    summary:     string | null;
+  }>;
+  summary: {
+    totalArticles: number;
+    byCategory:    Record<string, number>;
+    issues:        GroupIssue[];
+  };
+}
+
+/** スナップショット内の特定グループを取得し、自動検出 issue を付与して返す */
+export async function getSnapshotGroupDetail(
+  snapshotId: string,
+  groupId: string,
+): Promise<GroupInspectDetail | null> {
+  const group = await getPrisma().snapshotGroup.findFirst({
+    where: { id: groupId, snapshotId },
+    include: { items: { orderBy: [{ source: "asc" }, { publishedAt: "asc" }] } },
+  });
+  if (!group) return null;
+
+  const articles = group.items.map((item) => ({
+    title:       item.title,
+    url:         item.url,
+    source:      item.source,
+    publishedAt: item.publishedAt ?? null,
+    category:    item.category ?? null,
+    subcategory: item.subcategory ?? null,
+    summary:     item.summary ?? null,
+  }));
+
+  // カテゴリ集計
+  const byCategory: Record<string, number> = {};
+  for (const a of articles) {
+    const cat = a.category ?? "(未分類)";
+    byCategory[cat] = (byCategory[cat] ?? 0) + 1;
+  }
+
+  // Issue 検出（P2）
+  const issues: GroupIssue[] = [];
+
+  const cats = Object.keys(byCategory).filter((c) => c !== "(未分類)");
+  if (cats.length >= 2) {
+    issues.push({
+      type:     "cross_category_mismatch",
+      severity: "medium",
+      message:  `カテゴリが${cats.length}種類混在 (${cats.join(", ")})`,
+    });
+  }
+
+  if (!group.category) {
+    issues.push({
+      type:     "no_category",
+      severity: "low",
+      message:  "グループカテゴリが未設定",
+    });
+  }
+
+  const subcats = new Set(articles.map((a) => a.subcategory).filter(Boolean));
+  if (subcats.size >= 3) {
+    issues.push({
+      type:     "subcategory_mismatch",
+      severity: "low",
+      message:  `サブカテゴリが${subcats.size}種類混在`,
+    });
+  }
+
+  return {
+    snapshotId,
+    groupId:      group.id,
+    groupTitle:   group.groupTitle,
+    category:     group.category ?? null,
+    subcategory:  group.subcategory ?? null,
+    rank:         group.rank,
+    singleOutlet: group.singleOutlet,
+    coveredBy:    Array.isArray(group.coveredBy)  ? (group.coveredBy  as string[]) : [],
+    silentMedia:  Array.isArray(group.silentMedia) ? (group.silentMedia as string[]) : [],
+    articles,
+    summary: { totalArticles: articles.length, byCategory, issues },
+  };
+}
+
 export interface SnapshotMeta {
   id:           string;
   processedAt:  string;
@@ -517,6 +621,7 @@ export async function getLatestSnapshot(): Promise<SnapshotResult> {
   if (!snap) return { snapshot: null, groups: [] };
 
   const groups: NewsGroup[] = snap.groups.map((g) => ({
+    id:           g.id,
     groupTitle:   g.groupTitle,
     singleOutlet: g.singleOutlet,
     category:     g.category ?? undefined,
