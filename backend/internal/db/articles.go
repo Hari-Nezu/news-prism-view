@@ -60,12 +60,12 @@ func upsertChunk(ctx context.Context, pool *pgxpool.Pool, chunk []Article) error
 		)
 	}
 	sql := fmt.Sprintf(`
-		INSERT INTO "RssArticle" (id, url, title, source, summary, "imageUrl", "publishedAt", category, subcategory, "fetchedAt")
+		INSERT INTO rss_articles (id, url, title, source, summary, image_url, published_at, category, subcategory, fetched_at)
 		VALUES %s
 		ON CONFLICT (url) DO UPDATE SET
-			category    = COALESCE(EXCLUDED.category, "RssArticle".category),
-			subcategory = COALESCE(EXCLUDED.subcategory, "RssArticle".subcategory),
-			"fetchedAt" = NOW()`,
+			category    = COALESCE(EXCLUDED.category, rss_articles.category),
+			subcategory = COALESCE(EXCLUDED.subcategory, rss_articles.subcategory),
+			fetched_at  = NOW()`,
 		strings.Join(placeholders, ","),
 	)
 	_, err := pool.Exec(ctx, sql, args...)
@@ -76,10 +76,10 @@ func upsertChunk(ctx context.Context, pool *pgxpool.Pool, chunk []Article) error
 func GetUnembeddedArticles(ctx context.Context, pool *pgxpool.Pool) ([]Article, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT url, title, source, summary
-		FROM "RssArticle"
-		WHERE "embeddedAt" IS NULL
-		  AND "publishedAt" >= NOW() - INTERVAL '3 days'
-		ORDER BY "publishedAt" DESC NULLS LAST
+		FROM rss_articles
+		WHERE embedded_at IS NULL
+		  AND published_at >= NOW() - INTERVAL '3 days'
+		ORDER BY published_at DESC NULLS LAST
 		LIMIT 200`,
 	)
 	if err != nil {
@@ -105,11 +105,11 @@ func GetUnembeddedArticles(ctx context.Context, pool *pgxpool.Pool) ([]Article, 
 func GetUnclassifiedArticles(ctx context.Context, pool *pgxpool.Pool) ([]Article, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT url, title, source, summary, embedding::text
-		FROM "RssArticle"
-		WHERE "classifiedAt" IS NULL
-		  AND "embeddedAt" IS NOT NULL
-		  AND "publishedAt" >= NOW() - INTERVAL '3 days'
-		ORDER BY "publishedAt" DESC NULLS LAST
+		FROM rss_articles
+		WHERE classified_at IS NULL
+		  AND embedded_at IS NOT NULL
+		  AND published_at >= NOW() - INTERVAL '3 days'
+		ORDER BY published_at DESC NULLS LAST
 		LIMIT 200`,
 	)
 	if err != nil {
@@ -136,11 +136,11 @@ func GetUnclassifiedArticles(ctx context.Context, pool *pgxpool.Pool) ([]Article
 // GetRecentEmbeddedArticles returns articles with embeddings published in the last 3 days.
 func GetRecentEmbeddedArticles(ctx context.Context, pool *pgxpool.Pool) ([]Article, error) {
 	rows, err := pool.Query(ctx, `
-		SELECT url, title, source, summary, "publishedAt", category, subcategory, embedding::text
-		FROM "RssArticle"
-		WHERE "embeddedAt" IS NOT NULL
-		  AND "publishedAt" >= NOW() - INTERVAL '3 days'
-		ORDER BY "publishedAt" DESC NULLS LAST`,
+		SELECT url, title, source, summary, published_at, category, subcategory, embedding::text
+		FROM rss_articles
+		WHERE embedded_at IS NOT NULL
+		  AND published_at >= NOW() - INTERVAL '3 days'
+		ORDER BY published_at DESC NULLS LAST`,
 	)
 	if err != nil {
 		return nil, err
@@ -171,7 +171,7 @@ func SaveEmbeddings(ctx context.Context, pool *pgxpool.Pool, entries []struct {
 	for _, e := range entries {
 		vec := pgvector.NewVector(e.Vec)
 		_, err := pool.Exec(ctx,
-			`UPDATE "RssArticle" SET embedding = $1, "embeddedAt" = NOW() WHERE url = $2`,
+			`UPDATE rss_articles SET embedding = $1, embedded_at = NOW() WHERE url = $2`,
 			vec, e.URL,
 		)
 		if err != nil {
@@ -187,7 +187,7 @@ func SaveClassifications(ctx context.Context, pool *pgxpool.Pool, entries []stru
 }) error {
 	for _, e := range entries {
 		_, err := pool.Exec(ctx,
-			`UPDATE "RssArticle" SET category = $1, subcategory = $2, "classifiedAt" = NOW() WHERE url = $3`,
+			`UPDATE rss_articles SET category = $1, subcategory = $2, classified_at = NOW() WHERE url = $3`,
 			e.Category, e.Subcategory, e.URL,
 		)
 		if err != nil {

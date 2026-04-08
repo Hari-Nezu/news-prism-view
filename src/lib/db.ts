@@ -55,7 +55,7 @@ export async function saveArticle(
   if (embedding && embedding.length > 0) {
     const vec = `[${embedding.join(",")}]`;
     await getPrisma().$executeRawUnsafe(
-      `UPDATE "Article" SET embedding = $1::vector WHERE id = $2`,
+      `UPDATE articles SET embedding = $1::vector WHERE id = $2`,
       vec,
       saved.id
     );
@@ -100,11 +100,11 @@ export async function findSimilarArticles(
 ): Promise<Array<AnalyzedArticle & { similarity: number }>> {
   const vec = `[${embedding.join(",")}]`;
   const rows = await getPrisma().$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `SELECT id, title, url, source, "publishedAt", "analyzedAt",
+    `SELECT id, title, url, source, published_at AS "publishedAt", analyzed_at AS "analyzedAt",
             economic, social, diplomatic,
-            "emotionalTone", "biasWarning", confidence, summary, "counterOpinion",
+            emotional_tone AS "emotionalTone", bias_warning AS "biasWarning", confidence, summary, counter_opinion AS "counterOpinion",
             1 - (embedding <=> $1::vector) AS similarity
-     FROM "Article"
+     FROM articles
      WHERE embedding IS NOT NULL
        AND ($2::text IS NULL OR id != $2)
      ORDER BY embedding <=> $1::vector
@@ -162,7 +162,7 @@ export async function saveCompareResults(
     if (embeddings?.[i]?.length) {
       const vec = `[${embeddings[i].join(",")}]`;
       await getPrisma().$executeRawUnsafe(
-        `UPDATE "CompareResult" SET embedding = $1::vector WHERE id = $2`,
+        `UPDATE compare_results SET embedding = $1::vector WHERE id = $2`,
         vec,
         row.id
       );
@@ -204,7 +204,7 @@ export async function saveNewsGroupRecords(
     if (embeddings[i]?.length) {
       const vec = `[${embeddings[i].join(",")}]`;
       await getPrisma().$executeRawUnsafe(
-        `UPDATE "CompareGroupRecord" SET embedding = $1::vector WHERE id = $2`,
+        `UPDATE compare_group_records SET embedding = $1::vector WHERE id = $2`,
         vec,
         row.id
       );
@@ -231,11 +231,11 @@ export async function findSimilarGroups(
 ): Promise<SimilarGroupResult[]> {
   const vec = `[${embedding.join(",")}]`;
   const rows = await getPrisma().$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `SELECT id, "sessionId", "groupTitle", "singleOutlet", "itemCount", sources, "savedAt",
+    `SELECT id, session_id AS "sessionId", group_title AS "groupTitle", single_outlet AS "singleOutlet", item_count AS "itemCount", sources, saved_at AS "savedAt",
             1 - (embedding <=> $1::vector) AS similarity
-     FROM "CompareGroupRecord"
+     FROM compare_group_records
      WHERE embedding IS NOT NULL
-       AND ($2::text IS NULL OR "sessionId" != $2)
+       AND ($2::text IS NULL OR session_id != $2)
      ORDER BY embedding <=> $1::vector
      LIMIT $3`,
     vec,
@@ -267,9 +267,9 @@ export interface FeedGroupRecord {
 /** lastSeenAt 14日以内のアクティブなグループを取得（embedding必須） */
 export async function getActiveFeedGroups(): Promise<FeedGroupRecord[]> {
   const rows = await getPrisma().$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `SELECT id, title, "articleCount", embedding::text AS embedding_str
-     FROM "FeedGroup"
-     WHERE "lastSeenAt" > NOW() - INTERVAL '14 days'
+    `SELECT id, title, article_count AS "articleCount", embedding::text AS embedding_str
+     FROM feed_groups
+     WHERE last_seen_at > NOW() - INTERVAL '14 days'
        AND embedding IS NOT NULL`
   );
   return rows.flatMap((r) => {
@@ -292,7 +292,7 @@ export async function createFeedGroup(
   const row = await getPrisma().feedGroup.create({ data: { title } });
   if (embedding && embedding.length > 0) {
     await getPrisma().$executeRawUnsafe(
-      `UPDATE "FeedGroup" SET embedding = $1::vector WHERE id = $2`,
+      `UPDATE feed_groups SET embedding = $1::vector WHERE id = $2`,
       `[${embedding.join(",")}]`,
       row.id
     );
@@ -307,8 +307,8 @@ export async function updateFeedGroupCentroid(
   articleCount: number
 ): Promise<void> {
   await getPrisma().$executeRawUnsafe(
-    `UPDATE "FeedGroup"
-     SET embedding = $1::vector, "articleCount" = $2, "lastSeenAt" = NOW()
+    `UPDATE feed_groups
+     SET embedding = $1::vector, article_count = $2, last_seen_at = NOW()
      WHERE id = $3`,
     `[${embedding.join(",")}]`,
     articleCount,
@@ -337,7 +337,7 @@ export async function upsertFeedGroupItems(
 /** lastSeenAt 30日以上のグループを削除 */
 export async function deleteStaleFeedGroups(): Promise<void> {
   await getPrisma().$executeRawUnsafe(
-    `DELETE FROM "FeedGroup" WHERE "lastSeenAt" < NOW() - INTERVAL '30 days'`
+    `DELETE FROM feed_groups WHERE last_seen_at < NOW() - INTERVAL '30 days'`
   );
 }
 
@@ -416,12 +416,12 @@ export async function upsertRssArticles(items: RssFeedItem[]): Promise<void> {
     });
 
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "RssArticle" (id, url, title, source, summary, "imageUrl", "publishedAt", category, subcategory, "fetchedAt")
+      `INSERT INTO rss_articles (id, url, title, source, summary, image_url, published_at, category, subcategory, fetched_at)
        VALUES ${rows.join(", ")}
        ON CONFLICT (url) DO UPDATE SET
-         category    = COALESCE(EXCLUDED.category, "RssArticle".category),
-         subcategory = COALESCE(EXCLUDED.subcategory, "RssArticle".subcategory),
-         "fetchedAt" = NOW()`,
+         category    = COALESCE(EXCLUDED.category, rss_articles.category),
+         subcategory = COALESCE(EXCLUDED.subcategory, rss_articles.subcategory),
+         fetched_at  = NOW()`,
       ...params,
     );
   }
@@ -431,14 +431,14 @@ export async function upsertRssArticles(items: RssFeedItem[]): Promise<void> {
 export async function getRssArticlesSince(since: Date, sources?: string[]): Promise<RssFeedItem[]> {
   const hasSources = sources && sources.length > 0;
   const sql = hasSources
-    ? `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
-       FROM "RssArticle"
-       WHERE "fetchedAt" >= $1 AND source = ANY($2)
-       ORDER BY "publishedAt" DESC NULLS LAST`
-    : `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
-       FROM "RssArticle"
-       WHERE "fetchedAt" >= $1
-       ORDER BY "publishedAt" DESC NULLS LAST`;
+    ? `SELECT url, title, source, summary, image_url AS "imageUrl", published_at AS "publishedAt", category, subcategory
+       FROM rss_articles
+       WHERE fetched_at >= $1 AND source = ANY($2)
+       ORDER BY published_at DESC NULLS LAST`
+    : `SELECT url, title, source, summary, image_url AS "imageUrl", published_at AS "publishedAt", category, subcategory
+       FROM rss_articles
+       WHERE fetched_at >= $1
+       ORDER BY published_at DESC NULLS LAST`;
   const rows = await getPrisma().$queryRawUnsafe<Array<Record<string, unknown>>>(
     sql,
     ...(hasSources ? [since, sources] : [since]),
@@ -459,14 +459,14 @@ export async function getRssArticlesSince(since: Date, sources?: string[]): Prom
 export async function getRssArticlesBetween(since: Date, until: Date, sources?: string[]): Promise<RssFeedItem[]> {
   const hasSources = sources && sources.length > 0;
   const sql = hasSources
-    ? `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
-       FROM "RssArticle"
-       WHERE "publishedAt" >= $1 AND "publishedAt" <= $2 AND source = ANY($3)
-       ORDER BY "publishedAt" DESC NULLS LAST`
-    : `SELECT url, title, source, summary, "imageUrl", "publishedAt", category, subcategory
-       FROM "RssArticle"
-       WHERE "publishedAt" >= $1 AND "publishedAt" <= $2
-       ORDER BY "publishedAt" DESC NULLS LAST`;
+    ? `SELECT url, title, source, summary, image_url AS "imageUrl", published_at AS "publishedAt", category, subcategory
+       FROM rss_articles
+       WHERE published_at >= $1 AND published_at <= $2 AND source = ANY($3)
+       ORDER BY published_at DESC NULLS LAST`
+    : `SELECT url, title, source, summary, image_url AS "imageUrl", published_at AS "publishedAt", category, subcategory
+       FROM rss_articles
+       WHERE published_at >= $1 AND published_at <= $2
+       ORDER BY published_at DESC NULLS LAST`;
   const rows = await getPrisma().$queryRawUnsafe<Array<Record<string, unknown>>>(
     sql,
     ...(hasSources ? [since, until, sources] : [since, until]),
@@ -574,7 +574,7 @@ export async function getSnapshotHistory(limit = 20): Promise<SnapshotMeta[]> {
 /** 3ヶ月以上前の記事を削除 */
 export async function deleteStaleRssArticles(): Promise<void> {
   await getPrisma().$executeRawUnsafe(
-    `DELETE FROM "RssArticle" WHERE "fetchedAt" < NOW() - INTERVAL '3 months'`
+    `DELETE FROM rss_articles WHERE fetched_at < NOW() - INTERVAL '3 months'`
   );
 }
 
@@ -618,7 +618,7 @@ export async function saveYouTubeVideo(
 
   if (embedding && embedding.length > 0) {
     await getPrisma().$executeRawUnsafe(
-      `UPDATE "YouTubeVideo" SET embedding = $1::vector WHERE id = $2`,
+      `UPDATE youtube_videos SET embedding = $1::vector WHERE id = $2`,
       `[${embedding.join(",")}]`,
       saved.id
     );
@@ -636,7 +636,7 @@ export async function saveRssArticleEmbeddings(
   await Promise.all(
     entries.map(({ url, vec }) =>
       prisma.$executeRawUnsafe(
-        `UPDATE "RssArticle" SET embedding = $1::vector WHERE url = $2`,
+        `UPDATE rss_articles SET embedding = $1::vector WHERE url = $2`,
         `[${vec.join(",")}]`,
         url,
       ).catch(() => {})
@@ -651,7 +651,7 @@ export async function getRssArticleEmbeddingMap(
   if (urls.length === 0) return new Map();
   const rows = await getPrisma().$queryRawUnsafe<Array<{ url: string; embedding_str: string }>>(
     `SELECT url, embedding::text AS embedding_str
-     FROM "RssArticle"
+     FROM rss_articles
      WHERE url = ANY($1) AND embedding IS NOT NULL`,
     urls,
   );

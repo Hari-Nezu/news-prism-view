@@ -2,20 +2,20 @@
 -- ruri-v3-310m の実際の次元数は768（310mはパラメータ数）
 -- 既存データは次元数不一致で再利用不可のためdrop & add
 
-ALTER TABLE "RssArticle"        DROP COLUMN IF EXISTS embedding;
-ALTER TABLE "RssArticle"        ADD  COLUMN embedding vector(768);
+ALTER TABLE rss_articles         DROP COLUMN IF EXISTS embedding;
+ALTER TABLE rss_articles         ADD  COLUMN embedding vector(768);
 
-ALTER TABLE "Article"           DROP COLUMN IF EXISTS embedding;
-ALTER TABLE "Article"           ADD  COLUMN embedding vector(768);
+ALTER TABLE articles             DROP COLUMN IF EXISTS embedding;
+ALTER TABLE articles             ADD  COLUMN embedding vector(768);
 
-ALTER TABLE "FeedGroup"         DROP COLUMN IF EXISTS embedding;
-ALTER TABLE "FeedGroup"         ADD  COLUMN embedding vector(768);
+ALTER TABLE feed_groups          DROP COLUMN IF EXISTS embedding;
+ALTER TABLE feed_groups          ADD  COLUMN embedding vector(768);
 
-ALTER TABLE "CompareGroupRecord" DROP COLUMN IF EXISTS embedding;
-ALTER TABLE "CompareGroupRecord" ADD  COLUMN embedding vector(768);
+ALTER TABLE compare_group_records DROP COLUMN IF EXISTS embedding;
+ALTER TABLE compare_group_records ADD  COLUMN embedding vector(768);
 
-ALTER TABLE "YouTubeVideo"      DROP COLUMN IF EXISTS embedding;
-ALTER TABLE "YouTubeVideo"      ADD  COLUMN embedding vector(768);
+ALTER TABLE youtube_videos       DROP COLUMN IF EXISTS embedding;
+ALTER TABLE youtube_videos       ADD  COLUMN embedding vector(768);
 
-ALTER TABLE "CompareResult"     DROP COLUMN IF EXISTS embedding;
-ALTER TABLE "CompareResult"     ADD  COLUMN embedding vector(768);
+ALTER TABLE compare_results      DROP COLUMN IF EXISTS embedding;
+ALTER TABLE compare_results      ADD  COLUMN embedding vector(768);
