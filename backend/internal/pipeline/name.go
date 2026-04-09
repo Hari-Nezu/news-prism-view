@@ -93,7 +93,7 @@ func nameChunk(ctx context.Context, chatClient *llm.ChatClient, clusters []Clust
 
 	var clusterList strings.Builder
 	for i, c := range clusters {
-		cat := dominantCat(c.Articles)
+		cat := dominantCate(c.Articles)
 		titleParts := make([]string, 0, len(c.Articles))
 		for _, a := range c.Articles {
 			titleParts = append(titleParts, "「"+a.Title+"」")
