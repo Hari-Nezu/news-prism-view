@@ -8,6 +8,7 @@ import (
 	"github.com/newsprism/batch/internal/config"
 	"github.com/newsprism/batch/internal/db"
 	"github.com/newsprism/batch/internal/llm"
+	"github.com/newsprism/batch/internal/pipeline/steps"
 )
 
 // Result summarises a pipeline run.
@@ -38,21 +39,21 @@ func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.F
 
 	// 1. collect
 	slog.Info("pipeline: collect start", "feeds", len(feeds))
-	if _, err := Collect(ctx, pool, feeds); err != nil {
+	if _, err := steps.Collect(ctx, pool, feeds); err != nil {
 		slog.Error("collect failed", "err", err)
 		return partialResult(start, "collect failed: "+err.Error())
 	}
 
 	// 2. embed
 	slog.Info("pipeline: embed start")
-	if err := Embed(ctx, pool, embedClient); err != nil {
+	if err := steps.Embed(ctx, pool, embedClient); err != nil {
 		slog.Error("embed failed", "err", err)
 		return partialResult(start, "embed failed: "+err.Error())
 	}
 
 	// 3. classify
 	slog.Info("pipeline: classify start")
-	if err := Classify(ctx, pool); err != nil {
+	if err := steps.Classify(ctx, pool); err != nil {
 		slog.Error("classify failed", "err", err)
 		return partialResult(start, "classify failed: "+err.Error())
 	}
@@ -63,17 +64,17 @@ func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.F
 	if err != nil {
 		return partialResult(start, "get articles failed: "+err.Error())
 	}
-	clusters := GroupArticles(articles, cfg.GroupClusterThreshold)
+	clusters := steps.GroupArticles(articles, cfg.GroupClusterThreshold)
 	slog.Info("pipeline: group done", "clusters", len(clusters), "articles", len(articles))
 
 	// 5. name
 	slog.Info("pipeline: name start")
-	titles := NameClusters(ctx, chatClient, clusters)
+	titles := steps.NameClusters(ctx, chatClient, clusters)
 
 	// 6. store
 	slog.Info("pipeline: store start")
 	elapsed := int(time.Since(start).Milliseconds())
-	snapshotID, err := Store(ctx, pool, clusters, titles, elapsed, cfg.TimeDecayHalfLifeHours)
+	snapshotID, err := steps.Store(ctx, pool, clusters, titles, elapsed, cfg.TimeDecayHalfLifeHours)
 	if err != nil {
 		return partialResult(start, "store failed: "+err.Error())
 	}
@@ -81,12 +82,12 @@ func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.F
 	slog.Info("pipeline: complete",
 		"snapshotId", snapshotID,
 		"groups", len(clusters),
-		"articles", totalArticles(clusters),
+		"articles", steps.TotalArticles(clusters),
 		"ms", elapsed,
 	)
 	return Result{
 		SnapshotID:   snapshotID,
-		ArticleCount: totalArticles(clusters),
+		ArticleCount: steps.TotalArticles(clusters),
 		GroupCount:   len(clusters),
 		DurationMs:   elapsed,
 		Status:       "success",

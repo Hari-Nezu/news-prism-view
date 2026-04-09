@@ -1,4 +1,4 @@
-package pipeline
+package steps
 
 import (
 	"context"
@@ -35,8 +35,8 @@ func NameClusters(ctx context.Context, chatClient *llm.ChatClient, clusters []Cl
 
 	// Separate singletons (no LLM needed) from multi-article clusters
 	type indexedCluster struct {
-		orig  int
-		c     Cluster
+		orig int
+		c    Cluster
 	}
 	var multi []indexedCluster
 	for i, c := range clusters {

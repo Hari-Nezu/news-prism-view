@@ -1,4 +1,4 @@
-package pipeline
+package steps
 
 import (
 	"context"
@@ -112,7 +112,7 @@ func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []stri
 	}
 
 	snap := db.Snapshot{
-		ArticleCount: totalArticles(clusters),
+		ArticleCount: TotalArticles(clusters),
 		GroupCount:   len(groups),
 		DurationMs:   durationMs,
 		Status:       "success",
@@ -162,7 +162,8 @@ func silentSources(covered []string) []string {
 	return silent
 }
 
-func totalArticles(clusters []Cluster) int {
+// TotalArticles returns the total number of articles across all clusters.
+func TotalArticles(clusters []Cluster) int {
 	n := 0
 	for _, c := range clusters {
 		n += len(c.Articles)
