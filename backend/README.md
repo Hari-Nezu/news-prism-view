@@ -72,7 +72,8 @@ RssArticle                            ProcessedSnapshot
 
 - 直近3日以内のembedding済み記事を取得
 - **グリーディコサイン類似度クラスタリング**（閾値: `GROUP_CLUSTER_THRESHOLD`）
-- 異カテゴリ間はスコアに0.7倍のペナルティ
+- **同一カテゴリのクラスタにしか参加できない**（hard gate）
+- unknown カテゴリ（`""` または `"other"`）は例外レーン扱いで、unknown同士のみ結合可（閾値 +0.05）
 - embeddingなし記事は単独クラスタ扱い
 
 ### 5. name

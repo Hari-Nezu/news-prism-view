@@ -102,7 +102,7 @@ func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []stri
 
 		groups[i] = db.SnapshotGroup{
 			GroupTitle:   r.title,
-			Category:     r.cluster.DomCat,
+			Category:     r.cluster.DomCate,
 			Rank:         i + 1,
 			SingleOutlet: r.singleOutlet,
 			CoveredBy:    r.sources,
