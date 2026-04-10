@@ -27,8 +27,15 @@ func NewEmbedClient(baseURL, model string) *EmbedClient {
 const embedChunkSize = 32
 
 // EmbedBatch vectorizes texts in chunks of embedChunkSize per HTTP request.
+// Uses the document prefix ("文章: ") for article/document embeddings.
 // Returns nil slice elements for failed items.
 func (c *EmbedClient) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	return c.EmbedBatchWithPrefix(ctx, texts, "文章: ")
+}
+
+// EmbedBatchWithPrefix vectorizes texts using the specified prefix.
+// Use "文章: " for documents and "クエリ: " for queries (ruri-v3 asymmetric model).
+func (c *EmbedClient) EmbedBatchWithPrefix(ctx context.Context, texts []string, prefix string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, nil
 	}
@@ -39,7 +46,7 @@ func (c *EmbedClient) EmbedBatch(ctx context.Context, texts []string) ([][]float
 		if r := []rune(t); len(r) > 400 {
 			t = string(r[:400])
 		}
-		prepared[i] = "文章: " + t
+		prepared[i] = prefix + t
 	}
 
 	vecs := make([][]float32, len(texts))

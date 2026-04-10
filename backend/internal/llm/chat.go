@@ -45,7 +45,30 @@ func (c *ChatClient) Complete(ctx context.Context, system, user string) (string,
 	if err != nil {
 		return "", fmt.Errorf("marshal chat request: %w", err)
 	}
+	return c.doRequest(ctx, body)
+}
 
+// CompleteJSON sends a chat completion request with JSON response format.
+// Use for structured classification tasks (temperature=0.1).
+func (c *ChatClient) CompleteJSON(ctx context.Context, system, user string) (string, error) {
+	body, err := json.Marshal(map[string]any{
+		"model": c.Model,
+		"messages": []Message{
+			{Role: "system", Content: system},
+			{Role: "user", Content: user},
+		},
+		"stream":          false,
+		"temperature":     0.1,
+		"max_tokens":      2048,
+		"response_format": map[string]string{"type": "json_object"},
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshal chat request: %w", err)
+	}
+	return c.doRequest(ctx, body)
+}
+
+func (c *ChatClient) doRequest(ctx context.Context, body []byte) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", err

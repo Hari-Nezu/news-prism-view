@@ -34,8 +34,9 @@ func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.F
 	}
 	defer db.ReleasePipelineLock(ctx, pool)
 
-	embedClient := llm.NewEmbedClient(cfg.EmbedBaseURL, cfg.EmbedModel)
-	chatClient := llm.NewChatClient(cfg.LLMBaseURL, cfg.LLMModel)
+	embedClient   := llm.NewEmbedClient(cfg.EmbedBaseURL, cfg.EmbedModel)
+	chatClient    := llm.NewChatClient(cfg.LLMBaseURL, cfg.LLMModel)
+	classifyClient := llm.NewChatClient(cfg.LLMBaseURL, cfg.ClassifyModel)
 
 	// 1. collect
 	slog.Info("pipeline: collect start", "feeds", len(feeds))
@@ -53,7 +54,7 @@ func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.F
 
 	// 3. classify
 	slog.Info("pipeline: classify start")
-	if err := steps.Classify(ctx, pool); err != nil {
+	if err := steps.Classify(ctx, pool, embedClient, classifyClient, cfg.EmbedClassifyThreshold); err != nil {
 		slog.Error("classify failed", "err", err)
 		return partialResult(start, "classify failed: "+err.Error())
 	}
