@@ -749,6 +749,30 @@ export async function saveRssArticleEmbeddings(
   );
 }
 
+export interface SnapshotGroupSummary {
+  id:       string;
+  title:    string;
+  category: string | null;
+  items: Array<{ url: string; title: string; source: string; category: string | null }>;
+}
+
+/** スナップショット内の全グループとアイテムを返す（再計算診断用） */
+export async function getSnapshotGroupsForRecompute(
+  snapshotId: string,
+): Promise<SnapshotGroupSummary[]> {
+  const groups = await getPrisma().snapshotGroup.findMany({
+    where: { snapshotId },
+    orderBy: { rank: "asc" },
+    include: { items: { select: { url: true, title: true, source: true, category: true } } },
+  });
+  return groups.map((g) => ({
+    id:       g.id,
+    title:    g.groupTitle,
+    category: g.category ?? null,
+    items:    g.items,
+  }));
+}
+
 /** 指定URLの embedding を取得して Map<url, number[]> で返す */
 export async function getRssArticleEmbeddingMap(
   urls: string[]
