@@ -7,6 +7,31 @@ import type { SnapshotMeta, FeedGroupWithItems, GroupInspectDetail } from "@/lib
 
 type Tab = "feed" | "snapshot";
 
+interface RecomputeArticle {
+  url:                    string;
+  title:                  string;
+  source:                 string;
+  category:               string | null;
+  hasEmbedding:           boolean;
+  isUnknownCategory:      boolean;
+  similarityToCentroid:   number | null;
+  similarityBeforePenalty: number | null;
+  similarityAfterPenalty:  number | null;
+  wouldJoinAtThreshold:   boolean | null;
+  nearestNeighbors: Array<{ url: string; title: string; source: string; groupId: string; groupTitle: string; similarity: number }>;
+  alternativeClusters: Array<{ groupId: string; groupTitle: string; category: string | null; similarity: number }>;
+}
+
+interface RecomputeResult {
+  snapshotId:          string;
+  groupId:             string;
+  groupTitle:          string;
+  groupCategory:       string | null;
+  hasCentroid:         boolean;
+  articles:            RecomputeArticle[];
+  thresholdSimulation: { threshold: number; wouldStay: number; wouldLeave: number; noEmbedding: number };
+}
+
 function formatRelative(iso: string): string {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
   if (diff < 60)    return `${diff}秒前`;
@@ -67,6 +92,12 @@ export default function InspectPage() {
   // groupId → inspect detail（lazy fetch）
   const [inspectCache, setInspectCache] = useState<Map<string, GroupInspectDetail | null>>(new Map());
 
+  // groupId → recompute result
+  const [recomputeCache,   setRecomputeCache]   = useState<Map<string, RecomputeResult | null>>(new Map());
+  const [recomputeLoading, setRecomputeLoading] = useState<Set<string>>(new Set());
+  // groupId → 開いている記事インデックス（nearest neighbors 展開用）
+  const [expandedArticle, setExpandedArticle] = useState<Map<string, number | null>>(new Map());
+
   useEffect(() => {
     setFeedLoading(true);
     setSnapLoading(true);
@@ -118,6 +149,37 @@ export default function InspectPage() {
             });
         }
       }
+      return next;
+    });
+  }
+
+  function triggerRecompute(snapshotId: string, groupId: string) {
+    setRecomputeLoading((prev) => new Set(prev).add(groupId));
+    fetch("/api/batch/inspect/recompute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ snapshotId, groupId }),
+    })
+      .then((r) => r.json())
+      .then((d: RecomputeResult) => {
+        setRecomputeCache((c) => new Map(c).set(groupId, d));
+      })
+      .catch(() => {
+        setRecomputeCache((c) => new Map(c).set(groupId, null));
+      })
+      .finally(() => {
+        setRecomputeLoading((prev) => {
+          const next = new Set(prev);
+          next.delete(groupId);
+          return next;
+        });
+      });
+  }
+
+  function toggleArticleDetail(groupId: string, idx: number) {
+    setExpandedArticle((prev) => {
+      const next = new Map(prev);
+      next.set(groupId, prev.get(groupId) === idx ? null : idx);
       return next;
     });
   }
@@ -268,9 +330,11 @@ export default function InspectPage() {
                 ) : (
                   <div className="space-y-1">
                     {snapshotGroups.map((g, i) => {
-                      const groupId = g.id ?? `${g.rank ?? i}-${g.groupTitle}`;
-                      const open    = expandedSnap.has(groupId);
-                      const detail  = inspectCache.get(groupId) ?? null;
+                      const groupId   = g.id ?? `${g.rank ?? i}-${g.groupTitle}`;
+                      const open      = expandedSnap.has(groupId);
+                      const detail    = inspectCache.get(groupId) ?? null;
+                      const recompute = recomputeCache.get(groupId) ?? null;
+                      const rcLoading = recomputeLoading.has(groupId);
                       const covered = g.coveredBy  ?? [];
                       const silent  = g.silentMedia ?? [];
                       const issueCount = detail?.summary.issues.length ?? 0;
@@ -365,29 +429,131 @@ export default function InspectPage() {
                               <ul className="px-3 pt-2 pb-2 divide-y divide-gray-50">
                                 {(detail?.articles ?? g.items).map((item, j) => {
                                   const cat = "category" in item ? item.category : null;
+                                  const rcArticle = recompute?.articles.find((a) => a.url === item.url);
+                                  const artExpanded = expandedArticle.get(groupId) === j;
                                   return (
-                                    <li key={j} className="flex items-start gap-2 py-1.5">
-                                      <span className="text-xs font-semibold text-gray-500 shrink-0 w-24 truncate">{item.source}</span>
-                                      <a
-                                        href={item.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-xs text-gray-700 hover:text-blue-600 flex-1 line-clamp-2"
-                                      >
-                                        {item.title}
-                                      </a>
-                                      {cat && (
-                                        <span className="text-[10px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded shrink-0">
-                                          {cat}
+                                    <li key={j} className="py-1.5">
+                                      <div className="flex items-start gap-2">
+                                        <span className="text-xs font-semibold text-gray-500 shrink-0 w-24 truncate">{item.source}</span>
+                                        <a
+                                          href={item.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-xs text-gray-700 hover:text-blue-600 flex-1 line-clamp-2"
+                                        >
+                                          {item.title}
+                                        </a>
+                                        {cat && (
+                                          <span className="text-[10px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded shrink-0">
+                                            {cat}
+                                          </span>
+                                        )}
+                                        {rcArticle && (
+                                          <span
+                                            className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 cursor-pointer ${
+                                              rcArticle.wouldJoinAtThreshold === false
+                                                ? "bg-red-50 text-red-600"
+                                                : "bg-green-50 text-green-700"
+                                            }`}
+                                            title="similarityAfterPenalty — クリックで詳細"
+                                            onClick={() => toggleArticleDetail(groupId, j)}
+                                          >
+                                            {rcArticle.similarityAfterPenalty !== null
+                                              ? rcArticle.similarityAfterPenalty.toFixed(3)
+                                              : "—"}
+                                          </span>
+                                        )}
+                                        <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
+                                          {item.publishedAt ? formatRelative(item.publishedAt) : "—"}
                                         </span>
+                                      </div>
+                                      {/* 記事詳細（nearest neighbors / alternative clusters） */}
+                                      {rcArticle && artExpanded && (
+                                        <div className="mt-1.5 ml-26 pl-2 border-l-2 border-gray-100 space-y-2 text-[11px]">
+                                          <div className="flex gap-3 text-gray-500">
+                                            <span>centroid類似度: <span className="font-mono text-gray-700">{rcArticle.similarityToCentroid?.toFixed(4) ?? "—"}</span></span>
+                                            {rcArticle.isUnknownCategory && (
+                                              <span className="text-yellow-600">カテゴリ不明 (-0.05)</span>
+                                            )}
+                                          </div>
+                                          {rcArticle.nearestNeighbors.length > 0 && (
+                                            <div>
+                                              <p className="text-gray-400 font-semibold mb-0.5">近傍記事</p>
+                                              <ul className="space-y-0.5">
+                                                {rcArticle.nearestNeighbors.map((n, ni) => (
+                                                  <li key={ni} className="flex gap-2 items-start">
+                                                    <span className="font-mono text-gray-500 shrink-0">{n.similarity.toFixed(3)}</span>
+                                                    <span className="text-gray-400 shrink-0 truncate max-w-[80px]">{n.source}</span>
+                                                    <span className="text-gray-600 line-clamp-1 flex-1">{n.title}</span>
+                                                    {n.groupId !== groupId && (
+                                                      <span className="text-[10px] bg-orange-50 text-orange-600 px-1 rounded shrink-0">別グループ</span>
+                                                    )}
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          )}
+                                          {rcArticle.alternativeClusters.length > 0 && (
+                                            <div>
+                                              <p className="text-gray-400 font-semibold mb-0.5">代替クラスタ候補</p>
+                                              <ul className="space-y-0.5">
+                                                {rcArticle.alternativeClusters.map((ac, ai) => (
+                                                  <li key={ai} className="flex gap-2 items-center">
+                                                    <span className="font-mono text-gray-500 shrink-0">{ac.similarity.toFixed(3)}</span>
+                                                    <span className="text-gray-600 line-clamp-1">{ac.groupTitle}</span>
+                                                    {ac.category && (
+                                                      <span className="text-[10px] bg-blue-50 text-blue-500 px-1 rounded shrink-0">{ac.category}</span>
+                                                    )}
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          )}
+                                        </div>
                                       )}
-                                      <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
-                                        {item.publishedAt ? formatRelative(item.publishedAt) : "—"}
-                                      </span>
                                     </li>
                                   );
                                 })}
                               </ul>
+
+                              {/* 再計算診断ボタン・結果 */}
+                              {detail && snapshot && g.id && (
+                                <div className="px-3 pb-3 border-t border-gray-50 pt-2">
+                                  {!recompute && !rcLoading && (
+                                    <button
+                                      onClick={() => triggerRecompute(snapshot.id, g.id!)}
+                                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded transition-colors"
+                                    >
+                                      再計算診断を実行
+                                    </button>
+                                  )}
+                                  {rcLoading && (
+                                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                                      <div className="w-3 h-3 border border-gray-300 border-t-indigo-400 rounded-full animate-spin" />
+                                      再計算中…
+                                    </div>
+                                  )}
+                                  {recompute && (
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-3 text-xs">
+                                        <span className="font-semibold text-gray-500">閾値シミュレーション (thr={recompute.thresholdSimulation.threshold})</span>
+                                        <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded font-semibold">残留 {recompute.thresholdSimulation.wouldStay}</span>
+                                        <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded font-semibold">離脱 {recompute.thresholdSimulation.wouldLeave}</span>
+                                        {recompute.thresholdSimulation.noEmbedding > 0 && (
+                                          <span className="bg-gray-100 text-gray-400 px-2 py-0.5 rounded font-semibold">embedding無 {recompute.thresholdSimulation.noEmbedding}</span>
+                                        )}
+                                        <button
+                                          onClick={() => triggerRecompute(snapshot.id, g.id!)}
+                                          className="text-xs text-gray-400 hover:text-gray-600 ml-auto"
+                                        >
+                                          再実行
+                                        </button>
+                                      </div>
+                                      <p className="text-[11px] text-gray-400">各記事の類似度スコアをクリックで近傍・代替クラスタを表示</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
