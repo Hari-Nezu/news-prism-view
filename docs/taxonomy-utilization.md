@@ -14,7 +14,7 @@ taxonomy の活用は **一部実装済み**。
 
 ### 1. グループ化時のカテゴリ減衰
 
-Go バッチの [group.go](/Users/mk/Development/NewsPrismView/news-prism-view/backend/internal/pipeline/group.go) では、異カテゴリ間のマッチに 0.7 倍のペナルティを掛けている。
+Go バッチの [group.go](/Users/mk/Development/NewsPrismView/news-prism-view/batch/internal/pipeline/group.go) では、異カテゴリ間のマッチに 0.7 倍のペナルティを掛けている。
 
 ```go
 if a.Category != "" && a.Category != "other" &&

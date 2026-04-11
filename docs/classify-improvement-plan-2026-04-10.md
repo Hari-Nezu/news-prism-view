@@ -22,7 +22,7 @@ ruri-v3-310m は非対称モデル：
 
 ## 変更ファイル
 
-### 1. `backend/internal/taxonomy/taxonomy.go`（新規）
+### 1. `batch/internal/taxonomy/taxonomy.go`（新規）
 
 `news-taxonomy-configs.ts` と同一の 8 カテゴリ定義を Go 構造体で定義。
 
@@ -35,7 +35,7 @@ func BuildClassificationGuide() string  // LLMプロンプト用
 func ValidCategoryIDs() map[string]bool
 ```
 
-### 2. `backend/internal/llm/embed.go`（修正）
+### 2. `batch/internal/llm/embed.go`（修正）
 
 prefix を指定可能にする：
 
@@ -45,7 +45,7 @@ func (c *EmbedClient) EmbedBatchWithPrefix(ctx, texts []string, prefix string) (
 
 既存の `EmbedBatch` は内部で `EmbedBatchWithPrefix(ctx, texts, "文章: ")` を呼ぶラッパーに変更。
 
-### 3. `backend/internal/llm/chat.go`（修正）
+### 3. `batch/internal/llm/chat.go`（修正）
 
 JSON 応答用メソッドを追加：
 
@@ -54,7 +54,7 @@ func (c *ChatClient) CompleteJSON(ctx, system, user string) (string, error)
 // temperature=0.1, response_format=json_object
 ```
 
-### 4. `backend/internal/pipeline/steps/classify.go`（書き換え）
+### 4. `batch/internal/pipeline/steps/classify.go`（書き換え）
 
 シグネチャ変更：
 ```go
@@ -73,7 +73,7 @@ func Classify(ctx context.Context, pool *db.Pool, embedClient *llm.EmbedClient, 
 
 キーワードマップも新8カテゴリに更新（international→politics, society→culture_lifestyle, environment→science_tech, culture→culture_lifestyle に再編）。
 
-### 5. `backend/internal/pipeline/pipeline.go`（修正）
+### 5. `batch/internal/pipeline/pipeline.go`（修正）
 
 ```go
 classifyClient := llm.NewChatClient(cfg.LLMBaseURL, cfg.ClassifyModel)

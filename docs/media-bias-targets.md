@@ -3,7 +3,7 @@
 ## 現状
 
 バイアス可視化やカバレッジ表示で前提にしている主要媒体は **15社**。  
-定義はフロント側では [feed-configs.ts](/Users/mk/Development/NewsPrismView/news-prism-view/src/lib/config/feed-configs.ts)、バッチ側では [backend/feeds.yaml](/Users/mk/Development/NewsPrismView/news-prism-view/backend/feeds.yaml) にある。
+定義はフロント側では [feed-configs.ts](/Users/mk/Development/NewsPrismView/news-prism-view/src/lib/config/feed-configs.ts)、バッチ側では [batch/feeds.yaml](/Users/mk/Development/NewsPrismView/news-prism-view/batch/feeds.yaml) にある。
 
 現在のバッチは、収集後に **この主要媒体として定義された `source` のみ** を保存する。  
 `Google News 政治` のような総称 source や、未定義媒体は保存対象外。
