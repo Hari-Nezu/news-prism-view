@@ -390,7 +390,7 @@ ollama pull nomic-embed-text
 
 デフォルト有効フィード（15社）: NHK・朝日・毎日・産経・東洋経済・ハフポスト・読売・日経・東京新聞・時事・共同・TBS・テレ朝・日テレ・フジ。Google Newsトピック検索（政治・経済・国際）は無効。
 
-Goバッチは `backend/feeds.yaml`（Next.jsの `feed-configs.ts` と同じ内容）を参照する。
+Goバッチは `batch/feeds.yaml`（Next.jsの `feed-configs.ts` と同じ内容）を参照する。
 
 ### YouTubeチャンネル（`src/lib/youtube-channel-configs.ts`）
 

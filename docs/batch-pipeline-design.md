@@ -74,7 +74,7 @@
 ## ディレクトリ構成
 
 ```
-backend/
+batch/
 ├── cmd/
 │   └── newsprism-batch/
 │       └── main.go              — エントリポイント（run / serve サブコマンド）
@@ -135,11 +135,11 @@ backend/
 
 ## フィード定義の共有
 
-現状は Go 側の `backend/feeds.yaml` がバッチ収集の正となっている。  
+現状は Go 側の `batch/feeds.yaml` がバッチ収集の正となっている。  
 Next.js 側には別途 `src/lib/config/feed-configs.ts` も存在するため、完全な単一ソース化はまだ未実施。
 
 ```yaml
-# backend/feeds.yaml
+# batch/feeds.yaml
 feeds:
   - id: gnews-politics
     name: Google News 政治
@@ -365,7 +365,7 @@ Go の RSS パーサーで実装済みの箇所:
 ## 環境変数
 
 ```bash
-# backend/.env
+# batch/.env
 DATABASE_URL=postgresql://newsprism:newsprism@localhost:5432/newsprism
 LLM_BASE_URL=http://localhost:8081
 LLM_MODEL=ggml-org/gemma-4-E4B-it-Q8_0

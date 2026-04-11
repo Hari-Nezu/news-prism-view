@@ -16,7 +16,6 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { title, content, url, source, multiModel } = RequestSchema.parse(body);
-
     // ── シングルモデル（従来動作） ──
     if (!multiModel) {
       const analysis = await analyzeArticle(title, content);

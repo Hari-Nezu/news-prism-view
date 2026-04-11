@@ -98,6 +98,17 @@ var Categories = []Category{
 		},
 	},
 	{
+		ID:          "weather",
+		Label:       "天気",
+		Description: "気象状況、気温、警報・注意報、季節の話題",
+		Subcategories: []Subcategory{
+			{ID: "daily_weather", Label: "気象概況", Description: "日々の天気、気温、降水量"},
+			{ID: "extreme_heat", Label: "猛暑・暑さ", Description: "夏日、真夏日、猛暑日、熱中症対策"},
+			{ID: "heavy_rain", Label: "大雨・豪雨", Description: "大雨、土砂災害、浸水"},
+			{ID: "heavy_snow", Label: "大雪・寒波", Description: "積雪、路面凍結、降雪"},
+		},
+	},
+	{
 		ID:          "culture_lifestyle",
 		Label:       "文化・ライフスタイル",
 		Description: "エンタメ、教育、社会問題、事件・司法",
