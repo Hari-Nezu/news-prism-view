@@ -194,11 +194,11 @@ export default function CoverageMatrix({ groups }: Props) {
               </tr>
             </thead>
             <tbody>
-              {multiOutlet.map((group) => {
+              {multiOutlet.map((group, idx) => {
                 const rank = sorted.indexOf(group) + 1;
                 return (
                   <tr
-                    key={group.groupTitle}
+                    key={group.id ?? `${idx}-${group.groupTitle}`}
                     className="border-b border-gray-50 last:border-0 hover:bg-amber-50/50 cursor-pointer transition-colors group"
                     onClick={() => setSelected(group)}
                   >

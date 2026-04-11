@@ -1,9 +1,9 @@
-# 日本大手メディア バイアス可視化 対象一覧
+# 日本大手メディア バイアス可視化 対象一覧 仕様
 
 ## 現状
 
 バイアス可視化やカバレッジ表示で前提にしている主要媒体は **15社**。  
-定義はフロント側では [feed-configs.ts](/Users/mk/Development/NewsPrismView/news-prism-view/src/lib/config/feed-configs.ts)、バッチ側では [batch/feeds.yaml](/Users/mk/Development/NewsPrismView/news-prism-view/batch/feeds.yaml) にある。
+定義はフロント側では `src/lib/config/feed-configs.ts`、バッチ側では `batch/feeds.yaml` にある。
 
 現在のバッチは、収集後に **この主要媒体として定義された `source` のみ** を保存する。  
 `Google News 政治` のような総称 source や、未定義媒体は保存対象外。
@@ -31,7 +31,6 @@
 | `fnn` | フジテレビ | Google News site検索 + `canonical_source` |
 
 補足:
-
 - `nhk-politics` などの NHK サブフィードは存在するが、デフォルト収集対象ではない
 - `gnews-politics` / `gnews-economy` / `gnews-world` は定義だけあり、`defaultEnabled: false`
 
@@ -40,23 +39,10 @@
 ## 実装済みの挙動
 
 ### フロント
-
-- カバレッジマトリクスは [CoverageMatrix.tsx](/Users/mk/Development/NewsPrismView/news-prism-view/src/components/CoverageMatrix.tsx) で 15 社前提の列定義を持つ
+- カバレッジマトリクスは `src/components/CoverageMatrix.tsx` で 15 社前提の列定義を持つ
 - `coveredBy` / `silentMedia` は snapshot 側の保存値を使う
 
 ### バッチ
-
 - Google News source の媒体名抽出
 - `canonical_source` による表記揺れ吸収
 - 主要媒体以外の source を収集段階で破棄
-
----
-
-## まだやっていないこと
-
-- 媒体の政治的立ち位置を静的メタデータとして付与すること
-- `media-registry.ts` のような独立レジストリ化
-- 媒体別の長期平均スタンス集計API
-
-現状の方針は、**立ち位置を事前に決め打ちしない** こと。  
-記事単位の分析結果や、どのトピックを報じたかから後で集計する。
