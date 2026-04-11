@@ -105,6 +105,18 @@ export const CATEGORIES: CategoryDef[] = [
     ],
   },
   {
+    id: "weather",
+    label: "天気",
+    icon: "🌤️",
+    description: "気象状況、気温、警報・注意報、季節の話題",
+    subcategories: [
+      { id: "daily_weather", label: "気象概況", description: "日々の天気、気温、降水量" },
+      { id: "extreme_heat",  label: "猛暑・暑さ", description: "夏日、真夏日、猛暑日、熱中症対策" },
+      { id: "heavy_rain",    label: "大雨・豪雨", description: "大雨、土砂災害、浸水" },
+      { id: "heavy_snow",    label: "大雪・寒波", description: "積雪、路面凍結、降雪" },
+    ],
+  },
+  {
     id: "culture_lifestyle",
     label: "文化・ライフスタイル",
     icon: "🎭",
