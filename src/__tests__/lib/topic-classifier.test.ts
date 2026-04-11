@@ -20,8 +20,8 @@ describe("classifyTopic", () => {
   it("政治・外交キーワードで politics を返す", () => {
     expect(classifyTopic("国会で法案が可決、首相が署名")).toBe("politics");
     expect(classifyTopic("自民党、選挙公約を発表")).toBe("politics");
-    expect(classifyTopic("日米首脳会談、防衛費増額で合意")).toBe("politics");
-    expect(classifyTopic("北朝鮮がミサイル発射、日本海に落下")).toBe("politics");
+    expect(classifyTopic("日米同盟、防衛費増額で合意")).toBe("politics");
+    expect(classifyTopic("防衛省、ミサイル防衛体制を強化")).toBe("politics");
   });
 
   it("経済キーワードで economy を返す", () => {
@@ -42,20 +42,29 @@ describe("classifyTopic", () => {
 
   it("文化ライフスタイルキーワードで culture_lifestyle を返す", () => {
     expect(classifyTopic("新しいアニメ映画が興行収入1位")).toBe("culture_lifestyle");
-    expect(classifyTopic("殺人事件で容疑者を逮捕")).toBe("culture_lifestyle");
+    expect(classifyTopic("三ツ星レストランが新料理を発表")).toBe("culture_lifestyle");
+  });
+
+  it("社会キーワードで society を返す", () => {
+    expect(classifyTopic("殺人事件で容疑者を逮捕")).toBe("society");
+    expect(classifyTopic("交通事故で運転手を書類送検")).toBe("society");
+  });
+
+  it("天気キーワードで weather を返す", () => {
+    expect(classifyTopic("本日の天気は晴れのち雨")).toBe("weather");
+    expect(classifyTopic("都内で真夏日を記録")).toBe("weather");
   });
 
   it("キーワード未一致で other を返す", () => {
-    expect(classifyTopic("本日の天気は晴れのち曇り")).toBe("other");
-    expect(classifyTopic("新しいレストランがオープン")).toBe("other");
+    expect(classifyTopic("意味不明な文字列あいうえお")).toBe("other");
   });
 
   it("要約テキストも分類に使用される", () => {
     expect(classifyTopic("速報", "日銀が緊急利上げを決定")).toBe("economy");
   });
 
-  it("優先順位: 災害 > スポーツ > 健康 > 政治 > 経済", () => {
-    expect(classifyTopic("地震被害で株価急落、経済への影響懸念")).toBe("disaster");
+  it("優先順位: 災害 > 天気 > スポーツ > 社会", () => {
+    expect(classifyTopic("地震被害でプロ野球の試合が中止")).toBe("disaster");
   });
 });
 
@@ -79,8 +88,8 @@ describe("getTopicDef", () => {
 });
 
 describe("TOPIC_ORDER", () => {
-  it("8カテゴリすべてが定義されている", () => {
-    expect(TOPIC_ORDER).toHaveLength(8);
+  it("11カテゴリすべてが定義されている", () => {
+    expect(TOPIC_ORDER).toHaveLength(11);
     for (const id of TOPIC_ORDER) {
       expect(TOPICS[id]).toBeDefined();
     }
