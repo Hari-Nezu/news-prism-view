@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"github.com/newsprism/batch/internal/config"
-	"github.com/newsprism/batch/internal/db"
+	"github.com/newsprism/shared/db"
 	"github.com/newsprism/batch/internal/pipeline"
 	"github.com/robfig/cron/v3"
 )

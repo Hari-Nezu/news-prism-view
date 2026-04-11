@@ -7,7 +7,7 @@ import (
 
 	"github.com/mmcdole/gofeed"
 	"github.com/newsprism/batch/internal/config"
-	"github.com/newsprism/batch/internal/db"
+	"github.com/newsprism/shared/db"
 )
 
 // FetchFeed fetches a single RSS/Google News feed and returns articles.
