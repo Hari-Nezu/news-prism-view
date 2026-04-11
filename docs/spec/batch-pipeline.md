@@ -124,7 +124,7 @@ batch/
 |---|---------|---------|-----------|---------|
 | 1 | **collect** | 全フィード RSS 並行取得、RssArticle upsert | goroutine × フィード数 | ~5s |
 | 2 | **embed** | embedding 未計算記事のバッチ embedding | バッチAPI 1回（llama.cpp が並行処理） | ~20s/100件 |
-| 3 | **classify** | category/subcategory 未分類記事の分類 | Go 内でキーワード分類 | ~1s |
+| 3 | **classify** | category/subcategory 未分類記事の分類 | embedding→LLM→キーワード カスケード | ~5s |
 | 4 | **group** | embedding コサイン類似度クラスタリング | Go 内で完結（CPU） | ~1s |
 | 5 | **name** | LLM グループ命名 | 1回の API 呼び出し | ~10s |
 | 6 | **store** | スナップショット保存 + 古いスナップショット削除 | トランザクション 1回 | ~2s |
@@ -352,13 +352,10 @@ Go の RSS パーサーで実装済みの箇所:
 
 ---
 
-## 分類ステージ（現状）
+## 分類ステージ
 
-現状の Go バッチは、分類に LLM カスケードを使っていない。  
-`classify.go` でタイトルと要約に対するキーワード分類を行い、`category` のみを更新する。
-
-- `subcategory` は現在は空文字のまま保存
-- embedding → LLM カスケードは将来改善項目
+`classify.go` は embedding → LLM → キーワードの 3 フェーズカスケードで `category` / `subcategory` を決定する。  
+詳細は [classification-improvement.md](./classification-improvement.md) を参照。
 
 ---
 
