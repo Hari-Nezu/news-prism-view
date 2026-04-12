@@ -136,7 +136,7 @@ func GetUnclassifiedArticles(ctx context.Context, pool *pgxpool.Pool) ([]Article
 // GetRecentEmbeddedArticles returns articles with embeddings published in the last 3 days.
 func GetRecentEmbeddedArticles(ctx context.Context, pool *pgxpool.Pool) ([]Article, error) {
 	rows, err := pool.Query(ctx, `
-		SELECT url, title, source, summary, published_at, category, subcategory, embedding::text
+		SELECT url, title, source, summary, published_at, COALESCE(category,''), COALESCE(subcategory,''), embedding::text
 		FROM rss_articles
 		WHERE embedded_at IS NOT NULL
 		  AND published_at >= NOW() - INTERVAL '3 days'
@@ -165,7 +165,7 @@ func GetRecentEmbeddedArticles(ctx context.Context, pool *pgxpool.Pool) ([]Artic
 
 func GetRecentArticles(ctx context.Context, pool *pgxpool.Pool) ([]Article, error) {
 	rows, err := pool.Query(ctx, `
-		SELECT url, title, source, summary, published_at, category, subcategory
+		SELECT url, title, source, summary, published_at, COALESCE(category,''), COALESCE(subcategory,'')
 		FROM rss_articles
 		WHERE published_at >= NOW() - INTERVAL '7 days'
 		ORDER BY published_at DESC NULLS LAST

@@ -10,39 +10,39 @@ import (
 )
 
 type Snapshot struct {
-	ID           string
-	ProcessedAt  time.Time
-	ArticleCount int
-	GroupCount   int
-	DurationMs   int
-	Status       string
-	Error        string
-	Groups       []SnapshotGroup
+	ID           string          `json:"id"`
+	ProcessedAt  time.Time       `json:"processedAt"`
+	ArticleCount int             `json:"articleCount"`
+	GroupCount   int             `json:"groupCount"`
+	DurationMs   int             `json:"durationMs"`
+	Status       string          `json:"status"`
+	Error        string          `json:"error"`
+	Groups       []SnapshotGroup `json:"groups"`
 }
 
 type SnapshotGroup struct {
-	ID           string
-	SnapshotID   string
-	GroupTitle   string
-	Category     string
-	Subcategory  string
-	Rank         int
-	SingleOutlet bool
-	CoveredBy    []string
-	SilentMedia  []string
-	Items        []SnapshotGroupItem
+	ID           string              `json:"id"`
+	SnapshotID   string              `json:"snapshotId"`
+	GroupTitle   string              `json:"groupTitle"`
+	Category     string              `json:"category"`
+	Subcategory  string              `json:"subcategory"`
+	Rank         int                 `json:"rank"`
+	SingleOutlet bool                `json:"singleOutlet"`
+	CoveredBy    []string            `json:"coveredBy"`
+	SilentMedia  []string            `json:"silentMedia"`
+	Items        []SnapshotGroupItem `json:"items"`
 }
 
 type SnapshotGroupItem struct {
-	ID          string
-	GroupID     string
-	Title       string
-	URL         string
-	Source      string
-	Summary     string
-	PublishedAt string
-	Category    string
-	Subcategory string
+	ID          string `json:"id"`
+	GroupID     string `json:"groupId"`
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	Source      string `json:"source"`
+	Summary     string `json:"summary"`
+	PublishedAt string `json:"publishedAt"`
+	Category    string `json:"category"`
+	Subcategory string `json:"subcategory"`
 }
 
 func SaveSnapshot(ctx context.Context, pool *pgxpool.Pool, snap Snapshot) (string, error) {
@@ -120,7 +120,7 @@ func GetLatestSnapshotWithGroups(ctx context.Context, pool *pgxpool.Pool) (*Snap
 	}
 
 	rows, err := pool.Query(ctx, `
-		SELECT id, group_title, category, subcategory, rank, single_outlet, covered_by, silent_media
+		SELECT id, group_title, COALESCE(category,''), COALESCE(subcategory,''), rank, single_outlet, covered_by, silent_media
 		FROM snapshot_groups
 		WHERE snapshot_id = $1
 		ORDER BY rank ASC`,
@@ -132,7 +132,7 @@ func GetLatestSnapshotWithGroups(ctx context.Context, pool *pgxpool.Pool) (*Snap
 	defer rows.Close()
 
 	groupIDs := make([]string, 0)
-	groupMap := make(map[string]*SnapshotGroup)
+	groupIndexMap := make(map[string]int) // groupID → snap.Groups のインデックス
 	for rows.Next() {
 		var g SnapshotGroup
 		var coveredJSON, silentJSON []byte
@@ -146,14 +146,14 @@ func GetLatestSnapshotWithGroups(ctx context.Context, pool *pgxpool.Pool) (*Snap
 		if err := json.Unmarshal(silentJSON, &g.SilentMedia); err != nil {
 			return nil, fmt.Errorf("unmarshal silent_media: %w", err)
 		}
+		groupIndexMap[g.ID] = len(snap.Groups)
 		groupIDs = append(groupIDs, g.ID)
 		snap.Groups = append(snap.Groups, g)
-		groupMap[g.ID] = &snap.Groups[len(snap.Groups)-1]
 	}
 
 	if len(groupIDs) > 0 {
 		itemRows, err := pool.Query(ctx, `
-			SELECT id, group_id, title, url, source, summary, published_at, category, subcategory
+			SELECT id, group_id, title, url, source, COALESCE(summary,''), COALESCE(published_at,''), COALESCE(category,''), COALESCE(subcategory,'')
 			FROM snapshot_group_items
 			WHERE group_id = ANY($1)`,
 			groupIDs,
@@ -170,8 +170,8 @@ func GetLatestSnapshotWithGroups(ctx context.Context, pool *pgxpool.Pool) (*Snap
 			if err != nil {
 				return nil, err
 			}
-			if g, ok := groupMap[groupID]; ok {
-				g.Items = append(g.Items, item)
+			if idx, ok := groupIndexMap[groupID]; ok {
+				snap.Groups[idx].Items = append(snap.Groups[idx].Items, item)
 			}
 		}
 	}
@@ -207,7 +207,7 @@ func GetSnapshotGroupDetail(ctx context.Context, pool *pgxpool.Pool, groupID str
 	var g SnapshotGroup
 	var coveredJSON, silentJSON []byte
 	err := pool.QueryRow(ctx, `
-		SELECT id, snapshot_id, group_title, category, subcategory, rank, single_outlet, covered_by, silent_media
+		SELECT id, snapshot_id, group_title, COALESCE(category,''), COALESCE(subcategory,''), rank, single_outlet, covered_by, silent_media
 		FROM snapshot_groups
 		WHERE id = $1`,
 		groupID,
@@ -223,7 +223,7 @@ func GetSnapshotGroupDetail(ctx context.Context, pool *pgxpool.Pool, groupID str
 	}
 
 	itemRows, err := pool.Query(ctx, `
-		SELECT id, title, url, source, summary, published_at, category, subcategory
+		SELECT id, title, url, source, COALESCE(summary,''), COALESCE(published_at,''), COALESCE(category,''), COALESCE(subcategory,'')
 		FROM snapshot_group_items
 		WHERE group_id = $1`,
 		g.ID,

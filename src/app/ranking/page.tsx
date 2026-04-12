@@ -6,14 +6,7 @@ import type { NewsGroup, SnapshotMeta } from "@/types";
 import { API_BASE } from "@/lib/api-url";
 import CoverageMatrix from "@/components/CoverageMatrix";
 import OllamaStatus from "@/components/OllamaStatus";
-
-function formatRelative(iso: string): string {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60)  return `${diff}秒前`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}分前`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}時間前`;
-  return `${Math.floor(diff / 86400)}日前`;
-}
+import { formatRelative } from "@/lib/format-time";
 
 export default function RankingPage() {
   const [snapshot,   setSnapshot]   = useState<SnapshotMeta | null>(null);

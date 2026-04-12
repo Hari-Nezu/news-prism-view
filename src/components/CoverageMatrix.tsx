@@ -7,24 +7,9 @@ import { getSourceColors } from "@/lib/source-colors";
 import { groupItemsBySource } from "@/lib/group-items-by-source";
 import MediaComparisonView from "@/components/MediaComparisonView";
 import { API_BASE } from "@/lib/api-url";
-
-const MEDIA = [
-  { short: "N",    label: "NHK",               match: (s: string) => s.startsWith("NHK") },
-  { short: "朝",   label: "朝日新聞",           match: (s: string) => s.startsWith("朝日") },
-  { short: "毎",   label: "毎日新聞",           match: (s: string) => s.startsWith("毎日") },
-  { short: "読",   label: "読売新聞",           match: (s: string) => s.startsWith("読売") },
-  { short: "経",   label: "日本経済新聞",       match: (s: string) => s.startsWith("日経") || s === "日本経済新聞" },
-  { short: "産",   label: "産経新聞",           match: (s: string) => s.startsWith("産経") },
-  { short: "東",   label: "東京新聞",           match: (s: string) => s === "東京新聞" },
-  { short: "時",   label: "時事通信",           match: (s: string) => s === "時事通信" },
-  { short: "共",   label: "共同通信",           match: (s: string) => s === "共同通信" },
-  { short: "T",    label: "TBSニュース",        match: (s: string) => s.startsWith("TBS") },
-  { short: "テレ", label: "テレビ朝日",         match: (s: string) => s === "テレビ朝日" },
-  { short: "フジ", label: "フジテレビ",         match: (s: string) => s === "フジテレビ" },
-  { short: "NTV",  label: "日本テレビ",         match: (s: string) => s === "日本テレビ" },
-  { short: "洋",   label: "東洋経済オンライン", match: (s: string) => s.includes("東洋経済") },
-  { short: "ハ",   label: "ハフポスト日本版",   match: (s: string) => s.startsWith("ハフ") },
-];
+import { MEDIA, countArticles } from "@/lib/media-matcher";
+import { sortGroups } from "@/lib/sort-groups";
+import { formatRelative } from "@/lib/format-time";
 
 type OverlayView =
   | { type: "articles" }
@@ -32,25 +17,6 @@ type OverlayView =
   | { type: "results"; results: AnalyzedArticle[] }
   | { type: "error"; message: string };
 
-function sortGroups(groups: NewsGroup[]): NewsGroup[] {
-  return [...groups].sort((a, b) => {
-    if (a.singleOutlet !== b.singleOutlet) return a.singleOutlet ? 1 : -1;
-    const sa = new Set(a.items.map((i) => i.source)).size;
-    const sb = new Set(b.items.map((i) => i.source)).size;
-    if (sb !== sa) return sb - sa;
-    return b.items.length - a.items.length;
-  });
-}
-
-function formatRelative(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "今";
-  if (mins < 60) return `${mins}分前`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}時間前`;
-  return `${Math.floor(hours / 24)}日前`;
-}
 
 interface Props {
   groups: NewsGroup[];
@@ -82,7 +48,7 @@ export default function CoverageMatrix({ groups }: Props) {
     const ac = new AbortController();
     abortRef.current = ac;
 
-    const validItems = group.items
+    const validItems = (group.items ?? [])
       .filter((i) => { try { new URL(i.url); return true; } catch { return false; } })
       .slice(0, 10);
 
@@ -160,14 +126,10 @@ export default function CoverageMatrix({ groups }: Props) {
   if (multiOutlet.length === 0) return null;
 
   const activeMedia = MEDIA.filter((m) =>
-    multiOutlet.some((g) => g.items.some((item) => m.match(item.source)))
+    multiOutlet.some((g) => (g.items ?? []).some((item) => m.match(item.source)))
   );
 
   if (activeMedia.length === 0) return null;
-
-  function countArticles(group: NewsGroup, media: (typeof MEDIA)[0]): number {
-    return group.items.filter((item) => media.match(item.source)).length;
-  }
 
   return (
     <>
@@ -248,7 +210,7 @@ export default function CoverageMatrix({ groups }: Props) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-gray-900 leading-snug">{selected.groupTitle}</p>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  {new Set(selected.items.map((i) => i.source)).size}媒体 / {selected.items.length}件
+                  {new Set((selected.items ?? []).map((i) => i.source)).size}媒体 / {(selected.items ?? []).length}件
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -290,7 +252,7 @@ export default function CoverageMatrix({ groups }: Props) {
               {overlayView.type === "articles" && (
                 <div className="p-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {Array.from(groupItemsBySource(selected.items)).map(([source, items]) => {
+                    {Array.from(groupItemsBySource(selected.items ?? [])).map(([source, items]) => {
                       const colors = getSourceColors(source);
                       return (
                         <div

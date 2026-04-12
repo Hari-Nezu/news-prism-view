@@ -13,7 +13,15 @@ func (d *Deps) BatchLatest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "スナップショット取得に失敗しました: "+err.Error(), 500)
 		return
 	}
-	writeJSON(w, snap)
+	groups := snap.Groups
+	if groups == nil {
+		groups = []db.SnapshotGroup{}
+	}
+	snap.Groups = nil
+	writeJSON(w, map[string]any{
+		"snapshot": snap,
+		"groups":   groups,
+	})
 }
 
 func (d *Deps) BatchHistory(w http.ResponseWriter, r *http.Request) {
