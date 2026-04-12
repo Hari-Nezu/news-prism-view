@@ -210,6 +210,19 @@ func SaveEmbeddings(ctx context.Context, pool *pgxpool.Pool, entries []struct {
 	return nil
 }
 
+// SaveArticle inserts a single article with its embedding.
+func SaveArticle(ctx context.Context, pool *pgxpool.Pool, a Article) error {
+	_, err := pool.Exec(ctx, `
+		INSERT INTO rss_articles (url, title, source, summary, embedding, embedded_at, fetched_at)
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+		ON CONFLICT (url) DO UPDATE SET
+			embedding = EXCLUDED.embedding,
+			embedded_at = NOW()`,
+		a.URL, a.Title, a.Source, a.Summary, pgvector.NewVector(a.Embedding),
+	)
+	return err
+}
+
 // SaveClassifications updates the category, subcategory and classifiedAt fields.
 func SaveClassifications(ctx context.Context, pool *pgxpool.Pool, entries []struct {
 	URL, Category, Subcategory string
@@ -224,4 +237,36 @@ func SaveClassifications(ctx context.Context, pool *pgxpool.Pool, entries []stru
 		}
 	}
 	return nil
+}
+
+// FindSimilarArticles performs a vector cosine distance search.
+func FindSimilarArticles(ctx context.Context, pool *pgxpool.Pool, embedding []float32, limit int) ([]Article, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT url, title, source, summary, published_at
+		FROM rss_articles
+		WHERE embedding IS NOT NULL
+		  AND published_at >= NOW() - INTERVAL '30 days'
+		ORDER BY embedding <=> $1::vector
+		LIMIT $2`,
+		pgvector.NewVector(embedding), limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var articles []Article
+	for rows.Next() {
+		var a Article
+		var summary *string
+		err := rows.Scan(&a.URL, &a.Title, &a.Source, &summary, &a.PublishedAt)
+		if err != nil {
+			return nil, err
+		}
+		if summary != nil {
+			a.Summary = *summary
+		}
+		articles = append(articles, a)
+	}
+	return articles, rows.Err()
 }

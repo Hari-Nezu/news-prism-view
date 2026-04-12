@@ -39,10 +39,16 @@ docker compose -f docker-compose.local-ollama.yml up
 ### C. ローカル開発（コードを変更しながら使う）
 
 ```bash
-# DB と Ollama だけ Docker で起動
+# 1. DB と Ollama だけ Docker で起動
 docker compose up db ollama ollama-init
 
-# アプリをローカルで起動
+# 2. Go API サーバー & バッチサーバーを起動（別々のターミナルで）
+# Go API (Port 8091)
+go run ./server/cmd/newsprism-server
+# Go Batch (Port 8090)
+go run ./batch/cmd/newsprism-batch serve
+
+# 3. アプリをローカルで起動 (Port 3000)
 cp .env.local.sample .env.local
 npx prisma db push
 npm run dev
@@ -57,6 +63,14 @@ npm run dev
 ```bash
 cp .env.local.sample .env.local
 ```
+
+### API / Backend
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8091` | フロントエンドが参照する Go API サーバーの URL |
+| `API_PORT` | `8091` | Go API サーバーの待受ポート |
+| `BATCH_SERVER_URL` | `http://localhost:8090` | Go API が Batch 実行を依頼する際の URL |
 
 ### Ollama / モデル
 
