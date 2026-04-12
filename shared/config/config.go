@@ -6,22 +6,26 @@ import (
 )
 
 type SharedConfig struct {
-	DatabaseURL   string
-	LLMBaseURL    string
-	EmbedBaseURL  string
-	LLMModel      string
-	ClassifyModel string
-	EmbedModel    string
+	DatabaseURL            string
+	LLMBaseURL             string
+	EmbedBaseURL           string
+	LLMModel               string
+	ClassifyModel          string
+	EmbedModel             string
+	GroupClusterThreshold  float64
+	EmbedClassifyThreshold float64
 }
 
 func LoadShared() SharedConfig {
 	return SharedConfig{
-		DatabaseURL:   GetEnv("DATABASE_URL", "postgresql://newsprism:newsprism@localhost:5432/newsprism"),
-		LLMBaseURL:    GetEnv("LLM_BASE_URL", "http://127.0.0.1:8081"),
-		EmbedBaseURL:  GetEnv("EMBED_BASE_URL", "http://127.0.0.1:8081"),
-		LLMModel:      GetEnv("LLM_MODEL", "gemma-4-E4B-it-Q8_0"),
-		ClassifyModel: GetEnv("CLASSIFY_MODEL", "gemma-4-E4B-it-Q8_0"),
-		EmbedModel:    GetEnv("EMBED_MODEL", "Targoyle/ruri-v3-310m-GGUF:Q8_0"),
+		DatabaseURL:            GetEnv("DATABASE_URL", "postgresql://newsprism:newsprism@localhost:5432/newsprism"),
+		LLMBaseURL:             GetEnv("LLM_BASE_URL", "http://127.0.0.1:8081"),
+		EmbedBaseURL:           GetEnv("EMBED_BASE_URL", "http://127.0.0.1:8081"),
+		LLMModel:               GetEnv("LLM_MODEL", "gemma-4-E4B-it-Q8_0"),
+		ClassifyModel:          GetEnv("CLASSIFY_MODEL", "gemma-4-E4B-it-Q8_0"),
+		EmbedModel:             GetEnv("EMBED_MODEL", "Targoyle/ruri-v3-310m-GGUF:Q8_0"),
+		GroupClusterThreshold:  GetFloat("GROUP_CLUSTER_THRESHOLD", 0.72),
+		EmbedClassifyThreshold: GetFloat("EMBED_CLASSIFY_THRESHOLD", 0.5),
 	}
 }
 
