@@ -1,5 +1,9 @@
 # 開発用: Next.jsをホットリロードで起動
 # 使い方: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Go サービス（batch/api）はホストで go run するため通常は起動しない。
+# コンテナで Go サービスも動かしたい場合:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile go up
 services:
   app:
     build:
@@ -13,6 +17,13 @@ services:
       - /app/node_modules
       - /app/.next
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
-      - NEWSDATA_API_KEY=${NEWSDATA_API_KEY:-}
+      # dev では Go API をホストで直接 go run するため localhost を向く
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8091}
+    depends_on: {}
+
+  # batch/api は --profile go を付けた時だけ起動（通常はホストで go run）
+  batch:
+    profiles: ["go"]
+
+  api:
+    profiles: ["go"]
