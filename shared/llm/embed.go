@@ -26,6 +26,15 @@ func NewEmbedClient(baseURL, model string) *EmbedClient {
 
 const embedChunkSize = 32
 
+// Embed vectorizes a single text string using query prefix.
+func (c *EmbedClient) Embed(ctx context.Context, text string) ([]float32, error) {
+	vecs, err := c.EmbedBatchWithPrefix(ctx, []string{text}, "クエリ: ")
+	if err != nil || len(vecs) == 0 {
+		return nil, err
+	}
+	return vecs[0], nil
+}
+
 // EmbedBatch vectorizes texts in chunks of embedChunkSize per HTTP request.
 // Uses the document prefix ("文章: ") for article/document embeddings.
 // Returns nil slice elements for failed items.
