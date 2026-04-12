@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/newsprism/shared/db"
@@ -25,12 +26,17 @@ func (d *Deps) BatchHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Deps) BatchRun(w http.ResponseWriter, r *http.Request) {
-	resp, err := http.Post(d.BatchServerURL+"/run", "", nil)
-	if err != nil || resp.StatusCode != 200 {
+	resp, err := http.Post(d.BatchServerURL+"/run", "application/json", nil)
+	if err != nil {
 		writeError(w, "バッチサーバーに接続できませんでした", 502)
 		return
 	}
 	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode != 200 {
+		writeError(w, "バッチサーバーに接続できませんでした", 502)
+		return
+	}
 	writeJSON(w, map[string]bool{"ok": true})
 }
 

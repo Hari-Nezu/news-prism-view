@@ -131,6 +131,8 @@ func GetLatestSnapshotWithGroups(ctx context.Context, pool *pgxpool.Pool) (*Snap
 	}
 	defer rows.Close()
 
+	groupIDs := make([]string, 0)
+	groupMap := make(map[string]*SnapshotGroup)
 	for rows.Next() {
 		var g SnapshotGroup
 		var coveredJSON, silentJSON []byte
@@ -138,30 +140,40 @@ func GetLatestSnapshotWithGroups(ctx context.Context, pool *pgxpool.Pool) (*Snap
 		if err != nil {
 			return nil, err
 		}
-		json.Unmarshal(coveredJSON, &g.CoveredBy)
-		json.Unmarshal(silentJSON, &g.SilentMedia)
+		if err := json.Unmarshal(coveredJSON, &g.CoveredBy); err != nil {
+			return nil, fmt.Errorf("unmarshal covered_by: %w", err)
+		}
+		if err := json.Unmarshal(silentJSON, &g.SilentMedia); err != nil {
+			return nil, fmt.Errorf("unmarshal silent_media: %w", err)
+		}
+		groupIDs = append(groupIDs, g.ID)
+		snap.Groups = append(snap.Groups, g)
+		groupMap[g.ID] = &snap.Groups[len(snap.Groups)-1]
+	}
 
+	if len(groupIDs) > 0 {
 		itemRows, err := pool.Query(ctx, `
-			SELECT id, title, url, source, summary, published_at, category, subcategory
+			SELECT id, group_id, title, url, source, summary, published_at, category, subcategory
 			FROM snapshot_group_items
-			WHERE group_id = $1`,
-			g.ID,
+			WHERE group_id = ANY($1)`,
+			groupIDs,
 		)
 		if err != nil {
 			return nil, err
 		}
+		defer itemRows.Close()
+
 		for itemRows.Next() {
 			var item SnapshotGroupItem
-			err := itemRows.Scan(&item.ID, &item.Title, &item.URL, &item.Source, &item.Summary, &item.PublishedAt, &item.Category, &item.Subcategory)
+			var groupID string
+			err := itemRows.Scan(&item.ID, &groupID, &item.Title, &item.URL, &item.Source, &item.Summary, &item.PublishedAt, &item.Category, &item.Subcategory)
 			if err != nil {
-				itemRows.Close()
 				return nil, err
 			}
-			g.Items = append(g.Items, item)
+			if g, ok := groupMap[groupID]; ok {
+				g.Items = append(g.Items, item)
+			}
 		}
-		itemRows.Close()
-
-		snap.Groups = append(snap.Groups, g)
 	}
 
 	return snap, nil
@@ -203,8 +215,12 @@ func GetSnapshotGroupDetail(ctx context.Context, pool *pgxpool.Pool, groupID str
 	if err != nil {
 		return nil, err
 	}
-	json.Unmarshal(coveredJSON, &g.CoveredBy)
-	json.Unmarshal(silentJSON, &g.SilentMedia)
+	if err := json.Unmarshal(coveredJSON, &g.CoveredBy); err != nil {
+		return nil, fmt.Errorf("unmarshal covered_by: %w", err)
+	}
+	if err := json.Unmarshal(silentJSON, &g.SilentMedia); err != nil {
+		return nil, fmt.Errorf("unmarshal silent_media: %w", err)
+	}
 
 	itemRows, err := pool.Query(ctx, `
 		SELECT id, title, url, source, summary, published_at, category, subcategory

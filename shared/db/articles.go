@@ -189,7 +189,7 @@ func GetRecentArticles(ctx context.Context, pool *pgxpool.Pool) ([]Article, erro
 		}
 		articles = append(articles, a)
 	}
-	return articles, nil
+	return articles, rows.Err()
 }
 
 // SaveEmbeddings updates the embedding and embeddedAt fields for the given URLs.

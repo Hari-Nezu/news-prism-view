@@ -38,34 +38,42 @@ func GetFeedGroupsWithItems(ctx context.Context, pool *pgxpool.Pool) ([]FeedGrou
 	defer rows.Close()
 
 	var groups []FeedGroup
+	groupIDs := make([]string, 0)
+	groupMap := make(map[string]*FeedGroup)
 	for rows.Next() {
 		var g FeedGroup
 		err := rows.Scan(&g.ID, &g.Title, &g.ArticleCount, &g.LastSeenAt, &g.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
+		groupIDs = append(groupIDs, g.ID)
+		groups = append(groups, g)
+		groupMap[g.ID] = &groups[len(groups)-1]
+	}
 
+	if len(groupIDs) > 0 {
 		itemRows, err := pool.Query(ctx, `
 			SELECT id, group_id, title, url, source, COALESCE(published_at, ''), matched_at::text
 			FROM feed_group_items
-			WHERE group_id = $1`,
-			g.ID,
+			WHERE group_id = ANY($1)`,
+			groupIDs,
 		)
 		if err != nil {
 			return nil, err
 		}
+		defer itemRows.Close()
+
 		for itemRows.Next() {
 			var item FeedGroupItem
 			err := itemRows.Scan(&item.ID, &item.GroupID, &item.Title, &item.URL, &item.Source, &item.PublishedAt, &item.MatchedAt)
 			if err != nil {
-				itemRows.Close()
 				return nil, err
 			}
-			g.Items = append(g.Items, item)
+			if g, ok := groupMap[item.GroupID]; ok {
+				g.Items = append(g.Items, item)
+			}
 		}
-		itemRows.Close()
-
-		groups = append(groups, g)
 	}
+
 	return groups, nil
 }
