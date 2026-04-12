@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import type { NewsGroup } from "@/types";
-import type { SnapshotMeta, FeedGroupWithItems, GroupInspectDetail } from "@/lib/db";
+import type { NewsGroup, SnapshotMeta, FeedGroupWithItems, GroupInspectDetail } from "@/types";
+import { API_BASE } from "@/lib/api-url";
 
 type Tab = "feed" | "snapshot";
 
@@ -102,7 +102,7 @@ export default function InspectPage() {
     setFeedLoading(true);
     setSnapLoading(true);
 
-    fetch("/api/feed-groups")
+    fetch(`${API_BASE}/api/feed-groups`)
       .then((r) => r.json())
       .then((d) => {
         if (d.error) throw new Error(d.error);
@@ -111,7 +111,7 @@ export default function InspectPage() {
       .catch((e) => setFeedError(e.message))
       .finally(() => setFeedLoading(false));
 
-    fetch("/api/batch/latest")
+    fetch(`${API_BASE}/api/batch/latest`)
       .then((r) => r.json())
       .then((d) => {
         if (d.error) throw new Error(d.error);
@@ -139,7 +139,7 @@ export default function InspectPage() {
         next.add(groupId);
         // キャッシュ済みでなければ fetch
         if (!inspectCache.has(groupId)) {
-          fetch(`/api/batch/inspect?snapshotId=${snapshotId}&groupId=${groupId}`)
+          fetch(`${API_BASE}/api/batch/inspect?snapshotId=${snapshotId}&groupId=${groupId}`)
             .then((r) => r.json())
             .then((d: GroupInspectDetail) => {
               setInspectCache((c) => new Map(c).set(groupId, d));
@@ -155,7 +155,7 @@ export default function InspectPage() {
 
   function triggerRecompute(snapshotId: string, groupId: string) {
     setRecomputeLoading((prev) => new Set(prev).add(groupId));
-    fetch("/api/batch/inspect/recompute", {
+    fetch(`${API_BASE}/api/batch/inspect/recompute`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ snapshotId, groupId }),

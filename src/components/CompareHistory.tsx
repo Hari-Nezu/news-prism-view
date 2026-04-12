@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { API_BASE } from "@/lib/api-url";
 import type { NewsGroup } from "@/types";
 
 interface SessionRow {
@@ -23,7 +24,7 @@ export default function CompareHistory({ onRestore }: Props) {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/history?type=compare");
+      const res = await fetch(`${API_BASE}/api/history?type=compare`);
       const data = await res.json();
       if (res.ok) setSessions(data.sessions ?? []);
     } finally {

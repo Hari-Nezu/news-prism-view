@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { API_BASE } from "@/lib/api-url";
 
 export default function OllamaStatus() {
   const [model, setModel]                 = useState<string | null>(null);
   const [classifyModel, setClassifyModel] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/config")
+    fetch(`${API_BASE}/api/config`)
       .then((r) => r.json())
       .then((d) => {
         setModel(d.model);

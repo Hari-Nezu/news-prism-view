@@ -6,6 +6,7 @@ import type { NewsGroup, AnalyzedArticle } from "@/types";
 import { getSourceColors } from "@/lib/source-colors";
 import { groupItemsBySource } from "@/lib/group-items-by-source";
 import MediaComparisonView from "@/components/MediaComparisonView";
+import { API_BASE } from "@/lib/api-url";
 
 const MEDIA = [
   { short: "N",    label: "NHK",               match: (s: string) => s.startsWith("NHK") },
@@ -95,7 +96,7 @@ export default function CoverageMatrix({ groups }: Props) {
     const collected: AnalyzedArticle[] = [];
 
     try {
-      const res = await fetch("/api/compare/analyze", {
+      const res = await fetch(`${API_BASE}/api/compare/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

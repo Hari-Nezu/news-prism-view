@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { AnalyzedArticle } from "@/types";
 import { getTopicDef } from "@/lib/topic-classifier";
+import { API_BASE } from "@/lib/api-url";
 import type { TopicId } from "@/lib/topic-classifier";
 
 interface Props {
@@ -17,7 +18,7 @@ export default function ArticleHistory({ onRestore }: Props) {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/history?type=articles");
+      const res = await fetch(`${API_BASE}/api/history?type=articles`);
       const data = await res.json();
       if (res.ok) setArticles(data.articles ?? []);
     } finally {

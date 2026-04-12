@@ -7,6 +7,7 @@ import NewsGroupCard from "@/components/NewsGroupCard";
 import MediaComparisonView from "@/components/MediaComparisonView";
 import CompareHistory from "@/components/CompareHistory";
 import type { CompareStep, NewsGroup, AnalyzedArticle } from "@/types";
+import { API_BASE } from "@/lib/api-url";
 
 const SUGGESTED_KEYWORDS = ["防衛費", "原発", "少子化対策", "日銀", "外交", "半導体"];
 
@@ -36,7 +37,7 @@ export default function ComparePage() {
     setStep({ type: "fetching" });
     try {
       setStep({ type: "grouping" });
-      const res = await fetch(`/api/compare?keyword=${encodeURIComponent(kw)}`);
+      const res = await fetch(`${API_BASE}/api/compare?keyword=${encodeURIComponent(kw)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
@@ -66,7 +67,7 @@ export default function ComparePage() {
     const results: AnalyzedArticle[] = [];
 
     try {
-      const res = await fetch("/api/compare/analyze", {
+      const res = await fetch(`${API_BASE}/api/compare/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: group.items.map((i) => ({

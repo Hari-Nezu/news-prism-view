@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { API_BASE } from "@/lib/api-url";
 import type { Article } from "@/types";
 
 interface Props {
@@ -23,7 +24,7 @@ export default function ArticleInput({ onAnalyze, isLoading }: Props) {
     setIsFetching(true);
     setFetchError("");
     try {
-      const res = await fetch("/api/fetch-article", {
+      const res = await fetch(`${API_BASE}/api/fetch-article`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
