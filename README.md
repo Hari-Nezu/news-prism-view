@@ -43,6 +43,17 @@
 
 ---
 
+## アーキテクチャ
+
+本プロジェクトは **Go (Backend)** と **Next.js (Frontend)** のハイブリッド構成です。
+
+- **shared (Go)**: DBアクセス、LLM連携、共通設定などの共有モジュール。
+- **batch (Go)**: RSS収集、LLM分析、グループ化、DB保存を行うバックグラウンドプロセス。
+- **server (Go)**: フロントエンド向けの API サーバー（Next.js API Routes を順次移行中）。
+- **src (Next.js)**: React Server Components を活用したフロントエンド。
+
+---
+
 ## 使い方
 
 **記事を分析する**
