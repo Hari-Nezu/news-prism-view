@@ -6,6 +6,8 @@ import type { RssFeedItem } from "@/types";
 import { getSourceColors } from "@/lib/source-colors";
 import { getTopicDef, type TopicId } from "@/lib/topic-classifier";
 import { API_BASE } from "@/lib/api-url";
+import { formatRelative } from "@/lib/format-time";
+import { dedupAndSortFeedItems } from "@/lib/dedup-feed-items";
 import FeedSettingsDrawer, {
   loadFeedSettings,
   saveFeedSettings,
@@ -18,16 +20,6 @@ interface Props {
   onCompareArticle?: (item: RssFeedItem) => void;
   analyzedUrls?: string[];
   analyzingUrl?: string;
-}
-
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1)  return "今";
-  if (mins < 60) return `${mins}分前`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}時間前`;
-  return `${Math.floor(hours / 24)}日前`;
 }
 
 // ── コンパクト記事カード（カラム内用） ────────────────────
@@ -83,7 +75,7 @@ function ArticleCard({ item, isAnalyzed, isAnalyzing, onAnalyze, onCompareArticl
             {item.source}
           </span>
           {item.publishedAt && (
-            <span className="text-[10px] text-gray-400">{relativeTime(item.publishedAt)}</span>
+            <span className="text-[10px] text-gray-400">{formatRelative(item.publishedAt)}</span>
           )}
           {isAnalyzed && (
             <span className="text-[9px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded-full">
@@ -201,18 +193,7 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
         .filter((r): r is PromiseFulfilledResult<RssFeedItem[]> => r.status === "fulfilled")
         .flatMap((r) => r.value);
 
-      const seen = new Set<string>();
-      const deduped = allItems.filter((item) => {
-        if (!item.url || seen.has(item.url)) return false;
-        seen.add(item.url);
-        return true;
-      });
-      deduped.sort((a, b) => {
-        const da = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-        const db = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-        return db - da;
-      });
-      setItems(deduped);
+      setItems(dedupAndSortFeedItems(allItems));
     } catch (e) {
       setError(e instanceof Error ? e.message : "RSSの取得に失敗しました");
     } finally {

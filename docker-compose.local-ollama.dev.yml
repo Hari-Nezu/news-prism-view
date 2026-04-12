@@ -2,6 +2,9 @@
 #
 # 使い方:
 #   docker compose -f docker-compose.local-ollama.yml -f docker-compose.local-ollama.dev.yml up
+#
+# Go サービスをコンテナで動かす場合:
+#   docker compose -f docker-compose.local-ollama.yml -f docker-compose.local-ollama.dev.yml --profile go up
 services:
   app:
     build:
@@ -13,4 +16,11 @@ services:
       - /app/node_modules
       - /app/.next
     environment:
-      - OLLAMA_BASE_URL=http://host-gateway:11434
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8091}
+    depends_on: {}
+
+  batch:
+    profiles: ["go"]
+
+  api:
+    profiles: ["go"]

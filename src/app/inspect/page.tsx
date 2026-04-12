@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { NewsGroup, SnapshotMeta, FeedGroupWithItems, GroupInspectDetail } from "@/types";
 import { API_BASE } from "@/lib/api-url";
+import { formatRelative, formatDateTime } from "@/lib/format-time";
 
 type Tab = "feed" | "snapshot";
 
@@ -32,20 +33,6 @@ interface RecomputeResult {
   thresholdSimulation: { threshold: number; wouldStay: number; wouldLeave: number; noEmbedding: number };
 }
 
-function formatRelative(iso: string): string {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60)    return `${diff}秒前`;
-  if (diff < 3600)  return `${Math.floor(diff / 60)}分前`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}時間前`;
-  return `${Math.floor(diff / 86400)}日前`;
-}
-
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("ja-JP", {
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
 
 function SourceBadge({ count }: { count: number }) {
   const cls =
@@ -427,7 +414,7 @@ export default function InspectPage() {
 
                               {/* 記事リスト（inspect detail があれば category も表示） */}
                               <ul className="px-3 pt-2 pb-2 divide-y divide-gray-50">
-                                {(detail?.articles ?? g.items).map((item, j) => {
+                                {(detail?.articles ?? g.items ?? []).map((item, j) => {
                                   const cat = "category" in item ? item.category : null;
                                   const rcArticle = recompute?.articles.find((a) => a.url === item.url);
                                   const artExpanded = expandedArticle.get(groupId) === j;

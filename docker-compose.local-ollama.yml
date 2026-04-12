@@ -5,8 +5,8 @@
 #   docker compose -f docker-compose.local-ollama.yml up
 #
 # 前提:
-#   - ホストで Ollama が 11434 ポートで起動済み
-#   - 必要なモデルが pull 済み（llama3.2, ruri-v3-310m）
+#   - ホストで Ollama が起動済み（LLM_BASE_URL で指定）
+#   - 必要なモデルが pull 済み
 services:
   db-migrate:
     build:
@@ -19,22 +19,63 @@ services:
         condition: service_healthy
     restart: "no"
 
-  app:
-    build: .
-    ports:
-      - "3000:3000"
+  batch:
+    build:
+      context: .
+      dockerfile: Dockerfile.go
+      target: batch
     environment:
-      # host-gateway でホストの Ollama に接続
-      - LLM_BASE_URL=${LLM_BASE_URL:-http://host-gateway:8080}
-      - LLM_MODEL=${LLM_MODEL:-ggml-org/gemma3:4b}
-      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
       - DATABASE_URL=postgresql://newsprism:newsprism@db:5432/newsprism
-      - NEWSDATA_API_KEY=${NEWSDATA_API_KEY:-}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://host-gateway:8080}
+      - EMBED_BASE_URL=${LLM_BASE_URL:-http://host-gateway:8080}
+      - LLM_MODEL=${LLM_MODEL:-ggml-org/gemma3:4b}
+      - CLASSIFY_MODEL=${CLASSIFY_MODEL:-ggml-org/gemma3:4b}
+      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
     extra_hosts:
       - "host-gateway:host-gateway"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.go
+      target: server
+    ports:
+      - "8091:8091"
+    environment:
+      - DATABASE_URL=postgresql://newsprism:newsprism@db:5432/newsprism
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://host-gateway:8080}
+      - EMBED_BASE_URL=${LLM_BASE_URL:-http://host-gateway:8080}
+      - LLM_MODEL=${LLM_MODEL:-ggml-org/gemma3:4b}
+      - CLASSIFY_MODEL=${CLASSIFY_MODEL:-ggml-org/gemma3:4b}
+      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
+      - API_PORT=8091
+      - BATCH_SERVER_URL=http://batch:8090
+    extra_hosts:
+      - "host-gateway:host-gateway"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8091/api/config"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8091}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
   db:

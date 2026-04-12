@@ -10,21 +10,64 @@ services:
         condition: service_healthy
     restart: "no"
 
-  app:
-    build: .
-    ports:
-      - "3000:3000"
+  batch:
+    build:
+      context: .
+      dockerfile: Dockerfile.go
+      target: batch
     environment:
-      - LLM_BASE_URL=${LLM_BASE_URL:-http://localhost:8080}
-      - LLM_MODEL=${LLM_MODEL:-ggml-org/gemma3:4b}
-      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
       - DATABASE_URL=postgresql://newsprism:newsprism@db:5432/newsprism
-      - NEWSDATA_API_KEY=${NEWSDATA_API_KEY:-}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://ollama:11434}
+      - EMBED_BASE_URL=${LLM_BASE_URL:-http://ollama:11434}
+      - LLM_MODEL=${LLM_MODEL:-ggml-org/gemma3:4b}
+      - CLASSIFY_MODEL=${CLASSIFY_MODEL:-ggml-org/gemma3:4b}
+      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
     depends_on:
-      ollama-init:
-        condition: service_completed_successfully
       db-migrate:
         condition: service_completed_successfully
+      ollama-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.go
+      target: server
+    ports:
+      - "8091:8091"
+    environment:
+      - DATABASE_URL=postgresql://newsprism:newsprism@db:5432/newsprism
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://ollama:11434}
+      - EMBED_BASE_URL=${LLM_BASE_URL:-http://ollama:11434}
+      - LLM_MODEL=${LLM_MODEL:-ggml-org/gemma3:4b}
+      - CLASSIFY_MODEL=${CLASSIFY_MODEL:-ggml-org/gemma3:4b}
+      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
+      - API_PORT=8091
+      - BATCH_SERVER_URL=http://batch:8090
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      ollama-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8091/api/config"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      args:
+        # NEXT_PUBLIC_* はビルド時に展開される — ブラウザから見える Go API URL を指定
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8091}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
   ollama:
