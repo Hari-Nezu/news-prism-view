@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { RssFeedItem } from "@/types";
 import { getSourceColors } from "@/lib/source-colors";
 import { getTopicDef, type TopicId } from "@/lib/topic-classifier";
+import { API_BASE } from "@/lib/api-url";
 import FeedSettingsDrawer, {
   loadFeedSettings,
   saveFeedSettings,
@@ -179,7 +180,7 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
 
       if (currentSettings.enabledIds.length > 0) {
         requests.push(
-          fetch(`/api/rss?enabledIds=${currentSettings.enabledIds.join(",")}`)
+          fetch(`${API_BASE}/api/rss?enabledIds=${currentSettings.enabledIds.join(",")}`)
             .then((r) => r.json())
             .then((d) => (Array.isArray(d.items) ? d.items : []))
         );
@@ -187,7 +188,7 @@ export default function RssFeedPanel({ onAnalyze, onCompare, onCompareArticle, a
 
       for (const cf of currentSettings.customFeeds) {
         requests.push(
-          fetch(`/api/rss?feedUrl=${encodeURIComponent(cf.url)}&feedName=${encodeURIComponent(cf.name)}`)
+          fetch(`${API_BASE}/api/rss?feedUrl=${encodeURIComponent(cf.url)}&feedName=${encodeURIComponent(cf.name)}`)
             .then((r) => r.json())
             .then((d) => (Array.isArray(d.items) ? d.items : []))
         );

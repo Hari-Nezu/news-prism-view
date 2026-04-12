@@ -7,6 +7,7 @@ import YouTubeChannelPanel from "@/components/YouTubeChannelPanel";
 import ScoreCard from "@/components/ScoreCard";
 import PositioningPlot from "@/components/PositioningPlot";
 import { DEFAULT_ENABLED_CHANNEL_IDS } from "@/lib/config/youtube-channel-configs";
+import { API_BASE } from "@/lib/api-url";
 import type { AnalyzedArticle, MultiModelAnalyzedArticle, RssFeedItem } from "@/types";
 
 type YouTubeStep =
@@ -31,7 +32,7 @@ export default function YouTubePage() {
 
     try {
       const res = await fetch(
-        `/api/youtube/feed?channels=${encodeURIComponent(selectedChannels.join(","))}`
+        `${API_BASE}/api/youtube/feed?channels=${encodeURIComponent(selectedChannels.join(","))}`
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -54,7 +55,7 @@ export default function YouTubePage() {
     const results: MultiModelAnalyzedArticle[] = [];
 
     try {
-      const res = await fetch("/api/youtube/analyze", {
+      const res = await fetch(`${API_BASE}/api/youtube/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: items.map((i) => ({

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import type { NewsGroup } from "@/types";
-import type { SnapshotMeta } from "@/lib/db";
+import type { NewsGroup, SnapshotMeta } from "@/types";
+import { API_BASE } from "@/lib/api-url";
 import CoverageMatrix from "@/components/CoverageMatrix";
 import OllamaStatus from "@/components/OllamaStatus";
 
@@ -27,7 +27,7 @@ export default function RankingPage() {
     setIsLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/batch/latest");
+      const res = await fetch(`${API_BASE}/api/batch/latest`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "取得に失敗しました");
       setSnapshot(data.snapshot ?? null);
@@ -45,7 +45,7 @@ export default function RankingPage() {
     setIsRunning(true);
     setRunMessage("");
     try {
-      const res = await fetch("/api/batch/run", { method: "POST" });
+      const res = await fetch(`${API_BASE}/api/batch/run`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         setRunMessage(`エラー: ${data.error}`);

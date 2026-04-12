@@ -8,6 +8,7 @@ import PositioningPlot from "@/components/PositioningPlot";
 import ScoreCard from "@/components/ScoreCard";
 import ArticleHistory from "@/components/ArticleHistory";
 import type { Article, AnalyzedArticle, AnalysisResult, MultiModelAnalyzedArticle, ModelAnalysisResult, MultiModelAnalysis, AxisScore } from "@/types";
+import { API_BASE } from "@/lib/api-url";
 
 /** URL または タイトルで既分析済みの記事インデックスを返す */
 function findDuplicateIndex(
@@ -76,7 +77,7 @@ export default function Home() {
 
   /** マルチモデル分析（SSE） */
   const handleMultiModelAnalyze = useCallback(async (article: Article) => {
-    const res = await fetch("/api/analyze", {
+    const res = await fetch(`${API_BASE}/api/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -199,7 +200,7 @@ export default function Home() {
     setError("");
     setAnalyzingUrl(item.url);
     try {
-      const res = await fetch("/api/fetch-article", {
+      const res = await fetch(`${API_BASE}/api/fetch-article`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: item.url }),
@@ -220,7 +221,7 @@ export default function Home() {
     setIsFetchingUrl(true);
     setError("");
     try {
-      const res = await fetch("/api/fetch-article", {
+      const res = await fetch(`${API_BASE}/api/fetch-article`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: urlInput.trim() }),

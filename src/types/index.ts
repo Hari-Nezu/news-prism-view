@@ -76,6 +76,73 @@ export interface MultiModelAnalyzedArticle extends AnalyzedArticle {
   multiModel?: MultiModelAnalysis;
 }
 
+// ── バッチ/スナップショット関連 ─────────────────────────
+
+export interface SnapshotMeta {
+  id:           string;
+  processedAt:  string;
+  articleCount: number;
+  groupCount:   number;
+  durationMs:   number;
+  status:       string;
+  error:        string | null;
+}
+
+export interface SnapshotResult {
+  snapshot: SnapshotMeta | null;
+  groups:   NewsGroup[];
+}
+
+export interface FeedGroupWithItems {
+  id:                string;
+  title:             string;
+  articleCount:      number;
+  lastSeenAt:        string;
+  createdAt:         string;
+  uniqueSourceCount: number;
+  singleOutlet:      boolean;
+  items: Array<{
+    id:          string;
+    title:       string;
+    url:         string;
+    source:      string;
+    publishedAt: string | null;
+    matchedAt:   string;
+  }>;
+}
+
+export interface GroupIssue {
+  type:     string;
+  severity: "low" | "medium" | "high";
+  message:  string;
+}
+
+export interface GroupInspectDetail {
+  snapshotId:   string;
+  groupId:      string;
+  groupTitle:   string;
+  category:     string | null;
+  subcategory:  string | null;
+  rank:         number;
+  singleOutlet: boolean;
+  coveredBy:    string[];
+  silentMedia:  string[];
+  articles: Array<{
+    title:       string;
+    url:         string;
+    source:      string;
+    publishedAt: string | null;
+    category:    string | null;
+    subcategory: string | null;
+    summary:     string | null;
+  }>;
+  summary: {
+    totalArticles: number;
+    byCategory:    Record<string, number>;
+    issues:        GroupIssue[];
+  };
+}
+
 /** 比較ページの分析ステート */
 export type CompareStep =
   | { type: "idle" }
