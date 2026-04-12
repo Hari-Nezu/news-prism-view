@@ -1,7 +1,7 @@
 package db
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -22,9 +22,9 @@ func parseVectorStr(s string) []float32 {
 	result := make([]float32, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
-		var f float64
-		fmt.Sscanf(p, "%f", &f)
-		result = append(result, float32(f))
+		if f, err := strconv.ParseFloat(p, 32); err == nil {
+			result = append(result, float32(f))
+		}
 	}
 	return result
 }
