@@ -3,7 +3,7 @@ package steps
 import (
 	"testing"
 
-	"github.com/newsprism/batch/internal/db"
+	"github.com/newsprism/shared/db"
 )
 
 func vector(v ...float32) []float32 { return v }

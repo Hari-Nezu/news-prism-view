@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/newsprism/batch/internal/db"
-	"github.com/newsprism/batch/internal/llm"
+	"github.com/newsprism/shared/db"
+	"github.com/newsprism/shared/llm"
 )
 
 type groupNaming struct {

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/newsprism/batch/internal/db"
-	"github.com/newsprism/batch/internal/llm"
-	"github.com/newsprism/batch/internal/taxonomy"
+	"github.com/newsprism/shared/db"
+	"github.com/newsprism/shared/llm"
+	"github.com/newsprism/shared/taxonomy"
 )
 
 // Phase A: embedding-based classification (fast, ~100ms/article)

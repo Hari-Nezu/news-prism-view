@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/newsprism/batch/internal/db"
-	"github.com/newsprism/batch/internal/llm"
+	"github.com/newsprism/shared/db"
+	"github.com/newsprism/shared/llm"
 )
 
 // Embed computes embeddings for articles that don't have one yet.

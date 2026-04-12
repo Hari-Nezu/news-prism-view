@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/newsprism/batch/internal/db"
+	"github.com/newsprism/shared/db"
 )
 
 // allBiasMediaSources is the full list of media outlets tracked for bias analysis.

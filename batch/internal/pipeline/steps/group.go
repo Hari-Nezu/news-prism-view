@@ -3,7 +3,7 @@ package steps
 import (
 	"math"
 
-	"github.com/newsprism/batch/internal/db"
+	"github.com/newsprism/shared/db"
 )
 
 const (
