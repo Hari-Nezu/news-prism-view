@@ -163,6 +163,35 @@ func GetRecentEmbeddedArticles(ctx context.Context, pool *pgxpool.Pool) ([]Artic
 	return articles, rows.Err()
 }
 
+func GetRecentArticles(ctx context.Context, pool *pgxpool.Pool) ([]Article, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT url, title, source, summary, published_at, category, subcategory
+		FROM rss_articles
+		WHERE published_at >= NOW() - INTERVAL '7 days'
+		ORDER BY published_at DESC NULLS LAST
+		LIMIT 100`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var articles []Article
+	for rows.Next() {
+		var a Article
+		var summary *string
+		err := rows.Scan(&a.URL, &a.Title, &a.Source, &summary, &a.PublishedAt, &a.Category, &a.Subcategory)
+		if err != nil {
+			return nil, err
+		}
+		if summary != nil {
+			a.Summary = *summary
+		}
+		articles = append(articles, a)
+	}
+	return articles, rows.Err()
+}
+
 // SaveEmbeddings updates the embedding and embeddedAt fields for the given URLs.
 func SaveEmbeddings(ctx context.Context, pool *pgxpool.Pool, entries []struct {
 	URL string

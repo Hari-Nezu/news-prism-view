@@ -112,3 +112,135 @@ func GetLatestSnapshot(ctx context.Context, pool *pgxpool.Pool) (*Snapshot, erro
 	}
 	return &snap, nil
 }
+
+func GetLatestSnapshotWithGroups(ctx context.Context, pool *pgxpool.Pool) (*Snapshot, error) {
+	snap, err := GetLatestSnapshot(ctx, pool)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := pool.Query(ctx, `
+		SELECT id, group_title, category, subcategory, rank, single_outlet, covered_by, silent_media
+		FROM snapshot_groups
+		WHERE snapshot_id = $1
+		ORDER BY rank ASC`,
+		snap.ID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	groupIDs := make([]string, 0)
+	groupMap := make(map[string]*SnapshotGroup)
+	for rows.Next() {
+		var g SnapshotGroup
+		var coveredJSON, silentJSON []byte
+		err := rows.Scan(&g.ID, &g.GroupTitle, &g.Category, &g.Subcategory, &g.Rank, &g.SingleOutlet, &coveredJSON, &silentJSON)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(coveredJSON, &g.CoveredBy); err != nil {
+			return nil, fmt.Errorf("unmarshal covered_by: %w", err)
+		}
+		if err := json.Unmarshal(silentJSON, &g.SilentMedia); err != nil {
+			return nil, fmt.Errorf("unmarshal silent_media: %w", err)
+		}
+		groupIDs = append(groupIDs, g.ID)
+		snap.Groups = append(snap.Groups, g)
+		groupMap[g.ID] = &snap.Groups[len(snap.Groups)-1]
+	}
+
+	if len(groupIDs) > 0 {
+		itemRows, err := pool.Query(ctx, `
+			SELECT id, group_id, title, url, source, summary, published_at, category, subcategory
+			FROM snapshot_group_items
+			WHERE group_id = ANY($1)`,
+			groupIDs,
+		)
+		if err != nil {
+			return nil, err
+		}
+		defer itemRows.Close()
+
+		for itemRows.Next() {
+			var item SnapshotGroupItem
+			var groupID string
+			err := itemRows.Scan(&item.ID, &groupID, &item.Title, &item.URL, &item.Source, &item.Summary, &item.PublishedAt, &item.Category, &item.Subcategory)
+			if err != nil {
+				return nil, err
+			}
+			if g, ok := groupMap[groupID]; ok {
+				g.Items = append(g.Items, item)
+			}
+		}
+	}
+
+	return snap, nil
+}
+
+func GetSnapshotHistory(ctx context.Context, pool *pgxpool.Pool) ([]Snapshot, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT id, processed_at, article_count, group_count, duration_ms, status, COALESCE(error,'')
+		FROM processed_snapshots
+		ORDER BY processed_at DESC
+		LIMIT 20`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var history []Snapshot
+	for rows.Next() {
+		var snap Snapshot
+		err := rows.Scan(&snap.ID, &snap.ProcessedAt, &snap.ArticleCount, &snap.GroupCount, &snap.DurationMs, &snap.Status, &snap.Error)
+		if err != nil {
+			return nil, err
+		}
+		history = append(history, snap)
+	}
+	return history, nil
+}
+
+func GetSnapshotGroupDetail(ctx context.Context, pool *pgxpool.Pool, groupID string) (*SnapshotGroup, error) {
+	var g SnapshotGroup
+	var coveredJSON, silentJSON []byte
+	err := pool.QueryRow(ctx, `
+		SELECT id, snapshot_id, group_title, category, subcategory, rank, single_outlet, covered_by, silent_media
+		FROM snapshot_groups
+		WHERE id = $1`,
+		groupID,
+	).Scan(&g.ID, &g.SnapshotID, &g.GroupTitle, &g.Category, &g.Subcategory, &g.Rank, &g.SingleOutlet, &coveredJSON, &silentJSON)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(coveredJSON, &g.CoveredBy); err != nil {
+		return nil, fmt.Errorf("unmarshal covered_by: %w", err)
+	}
+	if err := json.Unmarshal(silentJSON, &g.SilentMedia); err != nil {
+		return nil, fmt.Errorf("unmarshal silent_media: %w", err)
+	}
+
+	itemRows, err := pool.Query(ctx, `
+		SELECT id, title, url, source, summary, published_at, category, subcategory
+		FROM snapshot_group_items
+		WHERE group_id = $1`,
+		g.ID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer itemRows.Close()
+
+	for itemRows.Next() {
+		var item SnapshotGroupItem
+		err := itemRows.Scan(&item.ID, &item.Title, &item.URL, &item.Source, &item.Summary, &item.PublishedAt, &item.Category, &item.Subcategory)
+		if err != nil {
+			return nil, err
+		}
+		g.Items = append(g.Items, item)
+	}
+
+	return &g, nil
+}
