@@ -33,16 +33,31 @@ func TestGroupArticles_SameCategory(t *testing.T) {
 	}
 }
 
-// Case 2: 異カテゴリ → 2 clusters に分かれる
-func TestGroupArticles_DifferentCategory(t *testing.T) {
+// Case 2a: 異カテゴリ + 非常に高い類似度 → soft gate を超えて 1 cluster にマージ
+// threshold=0.87, crossOffset=0.08 → effectiveThreshold=0.95, sim≈1.0 > 0.95
+func TestGroupArticles_DifferentCategoryHighSim(t *testing.T) {
 	v := vector(1, 0, 0)
 	articles := []db.Article{
 		makeArticle("politics", v),
 		makeArticle("economy", nearVector(v)),
 	}
 	clusters := GroupArticles(articles, 0.87)
+	if len(clusters) != 1 {
+		t.Errorf("high-sim cross-category: want 1 cluster (soft gate merges), got %d", len(clusters))
+	}
+}
+
+// Case 2b: 異カテゴリ + 中程度の類似度 → soft gate により 2 clusters のまま
+// threshold=0.87, crossOffset=0.08 → effectiveThreshold=0.95
+// [1,0,0] vs [0.92,0.39,0]: sim≈0.921 (0.87 < sim < 0.95)
+func TestGroupArticles_DifferentCategorySoftGate(t *testing.T) {
+	articles := []db.Article{
+		makeArticle("politics", vector(1, 0, 0)),
+		makeArticle("economy", vector(0.92, 0.39, 0)),
+	}
+	clusters := GroupArticles(articles, 0.87)
 	if len(clusters) != 2 {
-		t.Errorf("want 2 clusters, got %d", len(clusters))
+		t.Errorf("moderate-sim cross-category: want 2 clusters (soft gate blocks), got %d", len(clusters))
 	}
 }
 

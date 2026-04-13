@@ -9,6 +9,7 @@ import (
 const (
 	categoryOther                  = "other"
 	unknownCategoryThresholdOffset = 0.05
+	crossCategoryThresholdOffset   = 0.08
 )
 
 // Cluster represents a group of articles with a centroid embedding.
@@ -22,19 +23,10 @@ func isUnknownCategory(cat string) bool {
 	return cat == "" || cat == categoryOther
 }
 
-// canJoinCluster reports whether an article with articleCate may join a cluster with clusterCate.
-// Known categories require exact match; unknown categories ("" or "other") may only join each other.
-func canJoinCluster(articleCate, clusterCate string) bool {
-	if isUnknownCategory(articleCate) || isUnknownCategory(clusterCate) {
-		return isUnknownCategory(articleCate) && isUnknownCategory(clusterCate)
-	}
-	return articleCate == clusterCate
-}
-
 // GroupArticles performs greedy cosine similarity clustering.
 // Articles without embeddings are placed in single-article clusters.
-// Articles may only join clusters with the same category (hard gate).
-// Unknown categories ("" or "other") require a higher similarity threshold.
+// Unknown vs known category pairs are hard-blocked.
+// Known category mismatches require a higher similarity threshold (soft gate).
 func GroupArticles(articles []db.Article, threshold float64) []Cluster {
 	var clusters []Cluster
 
@@ -47,21 +39,26 @@ func GroupArticles(articles []db.Article, threshold float64) []Cluster {
 			continue
 		}
 
-		localThreshold := threshold
-		if isUnknownCategory(a.Category) {
-			localThreshold = threshold + unknownCategoryThresholdOffset
-		}
-
-		bestIdx, bestSim := -1, localThreshold
+		bestIdx, bestSim := -1, -1.0
 		for i, c := range clusters {
 			if len(c.Centroid) == 0 {
 				continue
 			}
-			if !canJoinCluster(a.Category, c.DomCate) {
-				continue
+
+			articleUnknown := isUnknownCategory(a.Category)
+			clusterUnknown := isUnknownCategory(c.DomCate)
+			effectiveThreshold := threshold
+			if articleUnknown || clusterUnknown {
+				if !(articleUnknown && clusterUnknown) {
+					continue // unknown vs known: hard block
+				}
+				effectiveThreshold += unknownCategoryThresholdOffset
+			} else if a.Category != c.DomCate {
+				effectiveThreshold += crossCategoryThresholdOffset
 			}
+
 			sim := float64(cosineSimilarity(a.Embedding, c.Centroid))
-			if sim > bestSim {
+			if sim > effectiveThreshold && sim > bestSim {
 				bestIdx, bestSim = i, sim
 			}
 		}

@@ -18,6 +18,8 @@ type NewsGroup struct {
 	Subcategory  string       `json:"subcategory"`
 }
 
+const crossCategoryThresholdOffset = float32(0.08)
+
 type Cluster struct {
 	Centroid    []float32
 	Articles    []db.Article
@@ -54,18 +56,19 @@ func groupGreedy(articles []db.Article, threshold float64) []Cluster {
 			continue
 		}
 
-		bestIdx, bestSim := -1, float32(threshold)
+		bestIdx, bestSim := -1, float32(-1)
 		for i, c := range clusters {
 			if len(c.Centroid) == 0 {
 				continue
 			}
-			// Simple category gate
+
+			effectiveThreshold := float32(threshold)
 			if a.Category != "" && c.DomCate != "" && a.Category != c.DomCate {
-				continue
+				effectiveThreshold += crossCategoryThresholdOffset
 			}
 
 			sim := db.CosineSimilarity(a.Embedding, c.Centroid)
-			if sim > bestSim {
+			if sim > effectiveThreshold && sim > bestSim {
 				bestIdx, bestSim = i, sim
 			}
 		}

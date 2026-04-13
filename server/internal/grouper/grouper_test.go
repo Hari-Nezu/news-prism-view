@@ -45,16 +45,28 @@ func TestGroupGreedy_OrthogonalVectors(t *testing.T) {
 	}
 }
 
-func TestGroupGreedy_CategoryGate(t *testing.T) {
-	// 高類似度でもカテゴリが違えば別クラスタ
+func TestGroupGreedy_CategorySoftGate_HighSim(t *testing.T) {
+	// sim=1.0 > threshold(0.5)+offset(0.08)=0.58 → soft gate を超えてマージ
 	vec := []float32{1, 0, 0}
 	articles := []db.Article{
 		{URL: "a", Title: "記事A", Embedding: vec, Category: "politics"},
 		{URL: "b", Title: "記事B", Embedding: vec, Category: "sports"},
 	}
 	clusters := groupGreedy(articles, 0.5)
+	if len(clusters) != 1 {
+		t.Fatalf("high-sim cross-category: got %d clusters, want 1", len(clusters))
+	}
+}
+
+func TestGroupGreedy_CategorySoftGate_ModerateSim(t *testing.T) {
+	// [1,0,0] vs [0.54,0.842,0]: sim≈0.54, threshold=0.5, effective=0.58 → ブロック
+	articles := []db.Article{
+		{URL: "a", Title: "記事A", Embedding: []float32{1, 0, 0}, Category: "politics"},
+		{URL: "b", Title: "記事B", Embedding: []float32{0.54, 0.842, 0}, Category: "sports"},
+	}
+	clusters := groupGreedy(articles, 0.5)
 	if len(clusters) != 2 {
-		t.Fatalf("異カテゴリ: got %d clusters, want 2", len(clusters))
+		t.Fatalf("moderate-sim cross-category: got %d clusters, want 2", len(clusters))
 	}
 }
 
