@@ -8,7 +8,7 @@ import { groupItemsBySource } from "@/lib/group-items-by-source";
 import MediaComparisonView from "@/components/MediaComparisonView";
 import { API_BASE } from "@/lib/api-url";
 import { MEDIA, countArticles } from "@/lib/media-matcher";
-import { sortGroups } from "@/lib/sort-groups";
+
 import { formatRelative } from "@/lib/format-time";
 
 type OverlayView =
@@ -120,8 +120,7 @@ export default function CoverageMatrix({ groups }: Props) {
     }
   }, [overlayView.type]);
 
-  const sorted = sortGroups(groups);
-  const multiOutlet = sorted.filter((g) => !g.singleOutlet);
+  const multiOutlet = groups.filter((g) => !g.singleOutlet);
 
   if (multiOutlet.length === 0) return null;
 
@@ -158,7 +157,7 @@ export default function CoverageMatrix({ groups }: Props) {
             </thead>
             <tbody>
               {multiOutlet.map((group, idx) => {
-                const rank = sorted.indexOf(group) + 1;
+                const rank = group.rank ?? idx + 1;
                 return (
                   <tr
                     key={group.id ?? `${idx}-${group.groupTitle}`}

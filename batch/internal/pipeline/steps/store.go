@@ -67,9 +67,12 @@ func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []stri
 		}
 	}
 
-	// Sort: finalScore desc, then sourceCount desc, then article count desc
+	// Sort: singleOutlet last, then finalScore desc, then sourceCount desc, then article count desc
 	sort.Slice(items, func(i, j int) bool {
 		a, b := items[i], items[j]
+		if a.singleOutlet != b.singleOutlet {
+			return !a.singleOutlet
+		}
 		if a.finalScore != b.finalScore {
 			return a.finalScore > b.finalScore
 		}
