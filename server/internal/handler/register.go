@@ -32,7 +32,6 @@ func Register(mux *http.ServeMux, d *Deps) {
 	mux.HandleFunc("POST /api/classify", d.Classify)
 
 	// Compare
-	mux.HandleFunc("GET /api/compare", d.Compare)
 	mux.HandleFunc("POST /api/compare/analyze", d.CompareAnalyze)
 
 	// Fetch Article

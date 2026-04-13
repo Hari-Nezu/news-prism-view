@@ -146,9 +146,7 @@ export interface GroupInspectDetail {
 /** 比較ページの分析ステート */
 export type CompareStep =
   | { type: "idle" }
-  | { type: "fetching" }                              // RSS収集中
-  | { type: "grouping" }                              // 同一ニュース判定中
-  | { type: "grouped"; groups: NewsGroup[] }          // グループ選択待ち
+  | { type: "grouped"; groups: NewsGroup[] }          // グループ選択待ち（履歴復元）
   | { type: "analyzing"; group: NewsGroup; progress: number; total: number }
   | { type: "done"; group: NewsGroup; results: AnalyzedArticle[] }
   | { type: "error"; message: string };

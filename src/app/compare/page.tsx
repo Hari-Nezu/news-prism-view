@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import OllamaStatus from "@/components/OllamaStatus";
 import NewsGroupCard from "@/components/NewsGroupCard";
@@ -9,58 +9,12 @@ import CompareHistory from "@/components/CompareHistory";
 import type { CompareStep, NewsGroup, AnalyzedArticle } from "@/types";
 import { API_BASE } from "@/lib/api-url";
 
-const SUGGESTED_KEYWORDS = ["防衛費", "原発", "少子化対策", "日銀", "外交", "半導体"];
-
 export default function ComparePage() {
-  const [keyword, setKeyword] = useState("");
   const [step, setStep] = useState<CompareStep>({ type: "idle" });
 
-  const isBusy = step.type === "fetching" || step.type === "grouping" || step.type === "analyzing";
+  const isBusy = step.type === "analyzing";
 
-  // URL の ?q= パラメータからシード記事タイトルを受け取り自動検索
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const q = new URLSearchParams(window.location.search).get("q");
-    if (!q) return;
-    // URL をクリーン（ブラウザ履歴に残さない）
-    window.history.replaceState(null, "", "/compare");
-    setKeyword(q);
-    handleSearch(q);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── フェーズ1: RSS収集 + グループ化 ──────────────────
-  const handleSearch = useCallback(async (searchKeyword?: string) => {
-    const kw = (searchKeyword ?? keyword).trim();
-    if (!kw) return;
-    if (searchKeyword) setKeyword(kw);
-
-    setStep({ type: "fetching" });
-    try {
-      setStep({ type: "grouping" });
-      const res = await fetch(`${API_BASE}/api/compare?keyword=${encodeURIComponent(kw)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      if (data.groups.length === 0) {
-        setStep({
-          type: "error",
-          message: `「${kw}」に合致する記事が見つかりませんでした（全${data.totalFetched}件中）。別のキーワードをお試しください。`,
-        });
-        return;
-      }
-
-      setStep({ type: "grouped", groups: data.groups });
-    } catch (err) {
-      setStep({ type: "error", message: err instanceof Error ? err.message : "エラーが発生しました" });
-    }
-  }, [keyword]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    handleSearch();
-  };
-
-  // ── フェーズ2: グループ選択 → 逐次分析（SSE） ────────
+  // ── グループ選択 → 逐次分析（SSE） ────────
   const handleSelectGroup = useCallback(async (group: NewsGroup) => {
     setStep({ type: "analyzing", group, progress: 0, total: group.items.length });
 
@@ -147,79 +101,23 @@ export default function ComparePage() {
               <p className="hidden sm:block text-[11px] text-gray-400">同一ニュースの報道色を比較分析</p>
             </div>
           </div>
-          <div className="hidden sm:flex">
-            <OllamaStatus />
-          </div>
-        </div>
-      </header>
-
-      {/* 検索バー */}
-      <div className="bg-white border-b border-gray-100">
-        <form onSubmit={handleSubmit} className="max-w-3xl mx-auto px-4 sm:px-6 py-3">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
-              <input
-                type="text"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                placeholder="キーワードを入力して比較検索..."
-                className="w-full text-sm text-gray-900 border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-400 transition-all"
-                disabled={isBusy}
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={!keyword.trim() || isBusy}
-              className="px-5 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-xl disabled:opacity-40 hover:bg-purple-700 transition-colors shadow-sm"
-            >
-              検索
-            </button>
-            {step.type !== "idle" && (
+          <div className="flex items-center gap-3">
+            {step.type !== "idle" && !isBusy && (
               <button
-                type="button"
                 onClick={handleReset}
-                className="px-4 py-2.5 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                className="px-4 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors"
               >
                 リセット
               </button>
             )}
+            <div className="hidden sm:flex">
+              <OllamaStatus />
+            </div>
           </div>
-        </form>
-      </div>
+        </div>
+      </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-
-        {/* ── ローディング ── */}
-        {(step.type === "fetching" || step.type === "grouping") && (
-          <div className="flex flex-col items-center gap-5 py-20">
-            <div className="relative">
-              <div className="w-14 h-14 border-4 border-purple-100 rounded-full" />
-              <div className="absolute inset-0 w-14 h-14 border-4 border-transparent border-t-purple-600 rounded-full animate-spin" />
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-semibold text-gray-700 mb-1">
-                {step.type === "fetching" ? "RSS記事を収集中..." : "同一ニュースを判定中..."}
-              </p>
-              <p className="text-xs text-gray-400">Ollamaが記事をグループ化しています</p>
-            </div>
-            {/* ステップインジケーター */}
-            <div className="flex items-center gap-3 text-xs">
-              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${
-                step.type === "fetching" ? "bg-purple-100 text-purple-700 font-semibold" : "bg-green-100 text-green-700"
-              }`}>
-                {step.type !== "fetching" && <span>✓</span>}
-                <span>RSS収集</span>
-              </div>
-              <span className="text-gray-300">→</span>
-              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${
-                step.type === "grouping" ? "bg-purple-100 text-purple-700 font-semibold" : "bg-gray-100 text-gray-400"
-              }`}>
-                <span>グループ化</span>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ── グループ選択 ── */}
         {step.type === "grouped" && (
@@ -306,7 +204,7 @@ export default function ComparePage() {
                 onClick={handleReset}
                 className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
               >
-                別のキーワードで検索
+                履歴に戻る
               </button>
             </div>
             <MediaComparisonView group={step.group} results={step.results} />
@@ -329,39 +227,12 @@ export default function ComparePage() {
           </div>
         )}
 
-        {/* ── 初期状態 ── */}
+        {/* ── 初期状態: 履歴から復元 ── */}
         {step.type === "idle" && (
-          <div>
-            {/* 検索履歴 */}
-            <div className="mb-8">
-              <CompareHistory onRestore={(kw, groups) => {
-                setKeyword(kw);
-                setStep({ type: "grouped", groups });
-              }} />
-            </div>
-
-            {/* ガイド */}
-            <div className="text-center py-12">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-purple-50 mb-4">
-                <span className="text-3xl">📊</span>
-              </div>
-              <p className="text-base font-semibold text-gray-700 mb-1">キーワードを入力して比較検索</p>
-              <p className="text-sm text-gray-400 mb-6">
-                複数メディアが同じニュースをどう報じているかを比較します
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {SUGGESTED_KEYWORDS.map((kw) => (
-                  <button
-                    key={kw}
-                    onClick={() => handleSearch(kw)}
-                    className="text-sm px-4 py-2 rounded-xl border border-gray-200 bg-white hover:border-purple-300 hover:text-purple-600 hover:shadow-sm transition-all"
-                  >
-                    {kw}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <CompareHistory onRestore={(kw, groups) => {
+            void kw;
+            setStep({ type: "grouped", groups });
+          }} />
         )}
       </main>
     </div>
