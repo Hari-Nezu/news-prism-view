@@ -324,7 +324,7 @@ export default function InspectPage() {
                       const rcLoading = recomputeLoading.has(groupId);
                       const covered = g.coveredBy  ?? [];
                       const silent  = g.silentMedia ?? [];
-                      const issueCount = detail?.summary.issues.length ?? 0;
+                      const issueCount = detail?.summary?.issues?.length ?? 0;
                       return (
                         <div key={groupId} className={`rounded-lg border bg-white ${g.singleOutlet ? "opacity-60" : ""}`}>
                           <button
@@ -376,7 +376,7 @@ export default function InspectPage() {
                               )}
 
                               {/* Issues */}
-                              {detail && detail.summary.issues.length > 0 && (
+                              {detail && detail.summary?.issues && detail.summary.issues.length > 0 && (
                                 <div className="px-3 pt-2 space-y-1">
                                   {detail.summary.issues.map((issue, k) => (
                                     <div
@@ -416,7 +416,7 @@ export default function InspectPage() {
                               <ul className="px-3 pt-2 pb-2 divide-y divide-gray-50">
                                 {(detail?.articles ?? g.items ?? []).map((item, j) => {
                                   const cat = "category" in item ? item.category : null;
-                                  const rcArticle = recompute?.articles.find((a) => a.url === item.url);
+                                  const rcArticle = recompute?.articles?.find((a) => a.url === item.url);
                                   const artExpanded = expandedArticle.get(groupId) === j;
                                   return (
                                     <li key={j} className="py-1.5">

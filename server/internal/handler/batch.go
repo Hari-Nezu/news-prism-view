@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 
@@ -49,9 +50,9 @@ func (d *Deps) BatchRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Deps) BatchInspect(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+	id := r.URL.Query().Get("groupId")
 	if id == "" {
-		writeError(w, "id is required", 400)
+		writeError(w, "groupId is required", 400)
 		return
 	}
 	group, err := db.GetSnapshotGroupDetail(r.Context(), d.Pool, id)
@@ -63,6 +64,22 @@ func (d *Deps) BatchInspect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Deps) BatchInspectRecompute(w http.ResponseWriter, r *http.Request) {
-	// TODO: implement recompute
-	writeError(w, "Not implemented", 501)
+	var req struct {
+		SnapshotID string `json:"snapshotId"`
+		GroupID    string `json:"groupId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "invalid request", 400)
+		return
+	}
+	if req.GroupID == "" {
+		writeError(w, "groupId is required", 400)
+		return
+	}
+	result, err := db.RecomputeGroupInspect(r.Context(), d.Pool, req.SnapshotID, req.GroupID, d.Config.GroupClusterThreshold)
+	if err != nil {
+		writeError(w, "recompute failed: "+err.Error(), 500)
+		return
+	}
+	writeJSON(w, result)
 }
