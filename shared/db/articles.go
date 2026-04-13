@@ -239,6 +239,72 @@ func SaveClassifications(ctx context.Context, pool *pgxpool.Pool, entries []stru
 	return nil
 }
 
+// GetEmbeddingsByURLs returns a url→embedding map for the given URLs.
+func GetEmbeddingsByURLs(ctx context.Context, pool *pgxpool.Pool, urls []string) (map[string][]float32, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT url, embedding::text FROM rss_articles
+		WHERE url = ANY($1) AND embedding IS NOT NULL`,
+		urls,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string][]float32)
+	for rows.Next() {
+		var url, embStr string
+		if err := rows.Scan(&url, &embStr); err != nil {
+			return nil, err
+		}
+		result[url] = parseVectorStr(embStr)
+	}
+	return result, rows.Err()
+}
+
+// SimilarArticleWithGroup is a result of FindSimilarArticlesWithGroup.
+type SimilarArticleWithGroup struct {
+	URL        string
+	Title      string
+	Source     string
+	GroupID    *string
+	GroupTitle *string
+	Similarity float32
+}
+
+// FindSimilarArticlesWithGroup performs a vector search and joins snapshot group info.
+func FindSimilarArticlesWithGroup(ctx context.Context, pool *pgxpool.Pool, embedding []float32, excludeURL string, limit int) ([]SimilarArticleWithGroup, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT a.url, a.title, a.source,
+		       sgi.group_id, sg.group_title,
+		       1 - (a.embedding <=> $1::vector) AS similarity
+		FROM rss_articles a
+		LEFT JOIN LATERAL (
+		    SELECT sgi2.group_id FROM snapshot_group_items sgi2
+		    WHERE sgi2.url = a.url LIMIT 1
+		) sgi ON true
+		LEFT JOIN snapshot_groups sg ON sg.id = sgi.group_id
+		WHERE a.embedding IS NOT NULL
+		  AND a.url != $2
+		  AND a.published_at >= NOW() - INTERVAL '30 days'
+		ORDER BY a.embedding <=> $1::vector
+		LIMIT $3`,
+		pgvector.NewVector(embedding), excludeURL, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var results []SimilarArticleWithGroup
+	for rows.Next() {
+		var a SimilarArticleWithGroup
+		if err := rows.Scan(&a.URL, &a.Title, &a.Source, &a.GroupID, &a.GroupTitle, &a.Similarity); err != nil {
+			return nil, err
+		}
+		results = append(results, a)
+	}
+	return results, rows.Err()
+}
+
 // FindSimilarArticles performs a vector cosine distance search.
 func FindSimilarArticles(ctx context.Context, pool *pgxpool.Pool, embedding []float32, limit int) ([]Article, error) {
 	rows, err := pool.Query(ctx, `
