@@ -36,12 +36,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Tailwind v4
 
 - `tailwind.config.js` は **不要・生成禁止** → `globals.css` の `@import "tailwindcss"` で完結
+- 任意値記法: `border-3` は存在しない → `border-[3px]`
+- ダークモード背景は CSS 変数 `--background` で管理 → `<body>` に `bg-gray-*` を直書きしない
 
-## Go batch
+## SSE ストリーミング
 
-- Go のビルドキャッシュは repo 内の `.gocache/` を使ってよい
-- `.gocache/` は `.gitignore` 対象
-- `batch` 配下で Go コマンドを実行する時は `GOCACHE=../.gocache` か `GOCACHE=/abs/path/.gocache` を使うと安全
+- 新規 SSE 処理は `src/lib/parse-sse.ts` の `parseSSEBuffer` を使う（インライン実装を追加しない）
+
+## Go
+
+- ビルドキャッシュ: `GOCACHE=../.gocache` か絶対パス指定（`.gitignore` 対象）
+- `SharedConfig` を JSON レスポンスにそのまま返さない（DB URL・APIキーが含まれる）
 
 ## 3軸スコアリング定義
 
