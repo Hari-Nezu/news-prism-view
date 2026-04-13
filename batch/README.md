@@ -30,12 +30,17 @@ go run ./cmd/newsprism-batch serve
 | 変数 | デフォルト | 説明 |
 |------|-----------|------|
 | `DATABASE_URL` | `postgresql://newsprism:newsprism@localhost:5432/newsprism` | PostgreSQL接続先 |
-| `LLM_BASE_URL` | `http://localhost:8081` | OpenAI互換LLMサーバー |
-| `LLM_MODEL` | `ggml-org/gemma-4-E4B-it-Q8_0` | クラスタ命名用チャットモデル |
+| `LLM_BASE_URL` | `http://127.0.0.1:8081` | OpenAI互換LLMサーバー（命名・分類用） |
+| `EMBED_BASE_URL` | `http://127.0.0.1:8081` | 埋め込みモデル用サーバー |
+| `LLM_MODEL` | `gemma-4-E4B-it-Q8_0` | クラスタ命名用チャットモデル |
+| `CLASSIFY_MODEL` | `gemma-4-E4B-it-Q8_0` | 分類フォールバック用チャットモデル |
 | `EMBED_MODEL` | `Targoyle/ruri-v3-310m-GGUF:Q8_0` | 埋め込みモデル（310次元） |
-| `GROUP_CLUSTER_THRESHOLD` | `0.87` | クラスタリングのコサイン類似度閾値 |
+| `GROUP_CLUSTER_THRESHOLD` | `0.72` | クラスタリングのコサイン類似度閾値 |
+| `EMBED_CLASSIFY_THRESHOLD` | `0.5` | embedding分類の信頼度閾値（これ未満はLLMフォールバック） |
+| `TIME_DECAY_HALF_LIFE_HOURS` | `12.0` | ランキングの時間減衰半減期（時間） |
 | `BATCH_PORT` | `8090` | serveモードのポート |
 | `FEEDS_YAML_PATH` | `feeds.yaml` | フィード定義ファイルパス |
+| `DEBUG` | _(未設定)_ | 設定するとログレベルが DEBUG に |
 
 ---
 
@@ -65,8 +70,13 @@ RssArticle                            ProcessedSnapshot
 ### 3. classify
 
 - `classifiedAt IS NULL` の記事を最大200件取得
-- **キーワードマッチで分類**（LLMなし）: 8カテゴリ（politics, economy, international, society, science_tech, environment, business, culture）
-- `RssArticle.category` と `classifiedAt` を更新
+- **3フェーズ分類**:
+  - Phase A: embedding コサイン類似度で分類（参照 embedding と比較、閾値: `EMBED_CLASSIFY_THRESHOLD`）
+  - Phase B: 信頼度不足の記事を LLM バッチ分類にフォールバック
+  - Phase C: LLM 失敗時はキーワードマッチにフォールバック
+- 11カテゴリ: politics, economy, business, international, society, health, disaster, sports, science_tech, weather, culture_lifestyle
+- 参照 embedding は `sync.Once` でプロセス起動時に1回ロード（taxonomy のサブカテゴリ説明文を embed）
+- `RssArticle.category`, `subcategory`, `classifiedAt` を更新
 
 ### 4. group
 
@@ -110,7 +120,7 @@ feeds:
     canonical_source: "読売新聞"  # Google Newsで表示される媒体名を上書き
 ```
 
-現在 `default_enabled: true` は大手メディア15社（NHK・朝日・毎日・産経・東洋経済・ハフポスト・読売・日経・東京・時事・共同・TBS・テレ朝・日テレ・フジ）。Google Newsトピック検索（政治・経済・国際）は `default_enabled: false`。
+現在 `default_enabled: true` は大手メディア15社（NHK・朝日・毎日・産経・東洋経済・ハフポスト・読売・日経・東京・時事・共同・TBS・テレ朝・日テレ・フジ）。Google News トピック検索（政治・経済・国際）は `default_enabled: false`。
 
 ---
 
