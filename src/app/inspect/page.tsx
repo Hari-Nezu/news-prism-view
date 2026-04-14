@@ -241,6 +241,9 @@ export default function InspectPage() {
                             onClick={() => toggleFeed(g.id)}
                             className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
                           >
+                            <span className="text-[9px] font-mono text-gray-300 shrink-0" title={g.id}>
+                              {g.id.slice(0, 8)}
+                            </span>
                             <span className="text-sm font-medium text-gray-800 flex-1 truncate">{g.title}</span>
                             <span className="text-xs text-gray-400 shrink-0">{formatRelative(g.lastSeenAt)}</span>
                             <span className="text-xs bg-gray-100 text-gray-600 font-semibold px-2 py-0.5 rounded-full shrink-0">
@@ -254,6 +257,7 @@ export default function InspectPage() {
                               <ul className="border-t border-gray-100 divide-y divide-gray-50">
                                 {g.items.map((item) => (
                                   <li key={item.id} className="flex items-start gap-2 px-3 py-2">
+                                    <span className="text-[9px] font-mono text-gray-300 shrink-0" title={item.id}>{item.id.slice(0, 8)}</span>
                                     <span className="text-xs font-semibold text-gray-500 shrink-0 w-24 truncate">{item.source}</span>
                                     <a
                                       href={item.url}
@@ -297,6 +301,7 @@ export default function InspectPage() {
                 {/* スナップショットメタ */}
                 {snapshot ? (
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mb-4 text-xs text-gray-500">
+                    <span>ID: <strong className="text-gray-800 font-mono text-[10px]">{snapshot.id}</strong></span>
                     <span>処理日時: <strong className="text-gray-800">{formatDateTime(snapshot.processedAt)}</strong></span>
                     <span>グループ数: <strong className="text-gray-800">{snapshot.groupCount}</strong></span>
                     <span>記事数: <strong className="text-gray-800">{snapshot.articleCount}</strong></span>
@@ -337,6 +342,11 @@ export default function InspectPage() {
                             {g.rank != null && (
                               <span className="text-xs font-black text-gray-400 shrink-0 w-6 text-right">
                                 {g.rank}
+                              </span>
+                            )}
+                            {g.id && (
+                              <span className="text-[9px] font-mono text-gray-300 shrink-0" title={g.id}>
+                                {g.id.slice(0, 8)}
                               </span>
                             )}
                             <span className="text-sm font-medium text-gray-800 flex-1 truncate">{g.groupTitle}</span>
@@ -473,7 +483,7 @@ export default function InspectPage() {
                                                     <span className="text-gray-400 shrink-0 truncate max-w-[80px]">{n.source}</span>
                                                     <span className="text-gray-600 line-clamp-1 flex-1">{n.title}</span>
                                                     {n.groupId !== groupId && (
-                                                      <span className="text-[10px] bg-orange-50 text-orange-600 px-1 rounded shrink-0">別グループ</span>
+                                                      <span className="text-[10px] bg-orange-50 text-orange-600 px-1 rounded shrink-0" title={n.groupId}>別グループ {n.groupId.slice(0, 8)}</span>
                                                     )}
                                                   </li>
                                                 ))}
@@ -487,6 +497,7 @@ export default function InspectPage() {
                                                 {rcArticle.alternativeClusters.map((ac, ai) => (
                                                   <li key={ai} className="flex gap-2 items-center">
                                                     <span className="font-mono text-gray-500 shrink-0">{ac.similarity.toFixed(3)}</span>
+                                                    <span className="text-[9px] font-mono text-gray-300 shrink-0" title={ac.groupId}>{ac.groupId.slice(0, 8)}</span>
                                                     <span className="text-gray-600 line-clamp-1">{ac.groupTitle}</span>
                                                     {ac.category && (
                                                       <span className="text-[10px] bg-blue-50 text-blue-500 px-1 rounded shrink-0">{ac.category}</span>

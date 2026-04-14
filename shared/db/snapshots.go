@@ -412,7 +412,7 @@ func RecomputeGroupInspect(ctx context.Context, pool *pgxpool.Pool, snapshotID, 
 			}
 
 			// Nearest neighbors
-			neighbors, _ := FindSimilarArticlesWithGroup(ctx, pool, emb, a.URL, 5)
+			neighbors, _ := FindSimilarArticlesWithGroup(ctx, pool, emb, a.URL, 5, snapshotID)
 			for _, n := range neighbors {
 				nb := RecomputeNeighbor{
 					URL:        n.URL,

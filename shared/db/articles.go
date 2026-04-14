@@ -272,7 +272,8 @@ type SimilarArticleWithGroup struct {
 }
 
 // FindSimilarArticlesWithGroup performs a vector search and joins snapshot group info.
-func FindSimilarArticlesWithGroup(ctx context.Context, pool *pgxpool.Pool, embedding []float32, excludeURL string, limit int) ([]SimilarArticleWithGroup, error) {
+// snapshotID scopes the group lookup to a specific snapshot so that results are consistent with the inspect page.
+func FindSimilarArticlesWithGroup(ctx context.Context, pool *pgxpool.Pool, embedding []float32, excludeURL string, limit int, snapshotID string) ([]SimilarArticleWithGroup, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT a.url, a.title, a.source,
 		       sgi.group_id, sg.group_title,
@@ -280,7 +281,9 @@ func FindSimilarArticlesWithGroup(ctx context.Context, pool *pgxpool.Pool, embed
 		FROM rss_articles a
 		LEFT JOIN LATERAL (
 		    SELECT sgi2.group_id FROM snapshot_group_items sgi2
-		    WHERE sgi2.url = a.url LIMIT 1
+		    JOIN snapshot_groups sg2 ON sg2.id = sgi2.group_id
+		    WHERE sgi2.url = a.url AND sg2.snapshot_id = $4
+		    LIMIT 1
 		) sgi ON true
 		LEFT JOIN snapshot_groups sg ON sg.id = sgi.group_id
 		WHERE a.embedding IS NOT NULL
@@ -288,7 +291,7 @@ func FindSimilarArticlesWithGroup(ctx context.Context, pool *pgxpool.Pool, embed
 		  AND a.published_at >= NOW() - INTERVAL '30 days'
 		ORDER BY a.embedding <=> $1::vector
 		LIMIT $3`,
-		pgvector.NewVector(embedding), excludeURL, limit,
+		pgvector.NewVector(embedding), excludeURL, limit, snapshotID,
 	)
 	if err != nil {
 		return nil, err
