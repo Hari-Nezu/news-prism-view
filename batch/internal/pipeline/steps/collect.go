@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/newsprism/batch/internal/config"
-	"github.com/newsprism/shared/db"
 	"github.com/newsprism/batch/internal/rss"
+	"github.com/newsprism/shared/db"
 )
 
 // Collect fetches all feeds concurrently and upserts articles to DB.

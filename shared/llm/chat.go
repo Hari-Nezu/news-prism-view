@@ -30,7 +30,11 @@ type Message struct {
 }
 
 // Complete sends a chat completion request and returns the assistant message content.
-func (c *ChatClient) Complete(ctx context.Context, system, user string) (string, error) {
+// maxTokens controls the response length; pass 0 to use the default (2048).
+func (c *ChatClient) Complete(ctx context.Context, system, user string, maxTokens int) (string, error) {
+	if maxTokens <= 0 {
+		maxTokens = 2048
+	}
 	body, err := json.Marshal(map[string]any{
 		"model": c.Model,
 		"messages": []Message{
@@ -39,7 +43,7 @@ func (c *ChatClient) Complete(ctx context.Context, system, user string) (string,
 		},
 		"stream":         false,
 		"temperature":    0.3,
-		"max_tokens":     2048,
+		"max_tokens":     maxTokens,
 		"repeat_penalty": 1.1,
 	})
 	if err != nil {

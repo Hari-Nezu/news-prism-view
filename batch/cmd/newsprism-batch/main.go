@@ -57,6 +57,14 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "rename":
+		result := pipeline.Rename(ctx, pool, cfg)
+		out, _ := json.MarshalIndent(result, "", "  ")
+		fmt.Println(string(out))
+		if result.Status == "failed" {
+			os.Exit(1)
+		}
+
 	case "serve":
 		runServe(ctx, pool, cfg, activeFeeds)
 
@@ -81,6 +89,13 @@ func runServe(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []con
 	mux.HandleFunc("POST /run", func(w http.ResponseWriter, r *http.Request) {
 		slog.Info("manual run triggered")
 		result := pipeline.Run(r.Context(), pool, cfg, feeds)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+	})
+
+	mux.HandleFunc("POST /rename", func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("rename triggered")
+		result := pipeline.Rename(r.Context(), pool, cfg)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(result)
 	})
