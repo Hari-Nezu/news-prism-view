@@ -146,7 +146,7 @@ func nameChunk(ctx context.Context, chatClient *llm.ChatClient, clusters []Clust
 		"items", strings.Join(clusterSummary, " "),
 	)
 
-	content, err := chatClient.Complete(ctx, system, prompt)
+	content, err := chatClient.Complete(ctx, system, prompt, 4096)
 	elapsed := time.Since(t0)
 	if err != nil {
 		slog.Warn("name clusters LLM error, using fallback",

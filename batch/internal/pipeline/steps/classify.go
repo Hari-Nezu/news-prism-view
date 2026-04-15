@@ -143,7 +143,9 @@ func classifyBatchLLM(ctx context.Context, chatClient *llm.ChatClient, articles 
 
 	var batch llmBatchResult
 	if jsonErr := json.Unmarshal([]byte(raw), &batch); jsonErr != nil {
-		slog.Warn("classify LLM batch parse failed", "err", jsonErr, "raw", raw[:min(len(raw), 200)])
+		slog.Warn(
+			"classify LLM batch parse failed",
+			"err", jsonErr, "raw", raw[:min(len(raw), 200)])
 		return nil
 	}
 
@@ -361,11 +363,4 @@ func Classify(ctx context.Context, pool *db.Pool, embedClient *llm.EmbedClient, 
 		"llm", len(llmBatch),
 	)
 	return nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

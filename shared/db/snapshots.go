@@ -179,6 +179,25 @@ func GetLatestSnapshotWithGroups(ctx context.Context, pool *pgxpool.Pool) (*Snap
 	return snap, nil
 }
 
+// UpdateSnapshotGroupTitles updates group_title for each groupID in the map.
+func UpdateSnapshotGroupTitles(ctx context.Context, pool *pgxpool.Pool, updates map[string]string) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	for groupID, title := range updates {
+		if _, err := tx.Exec(ctx,
+			`UPDATE snapshot_groups SET group_title = $1 WHERE id = $2`,
+			title, groupID,
+		); err != nil {
+			return fmt.Errorf("update group %s: %w", groupID, err)
+		}
+	}
+	return tx.Commit(ctx)
+}
+
 func GetSnapshotHistory(ctx context.Context, pool *pgxpool.Pool) ([]Snapshot, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT id, processed_at, article_count, group_count, duration_ms, status, COALESCE(error,'')

@@ -9,8 +9,10 @@ type SharedConfig struct {
 	DatabaseURL            string
 	LLMBaseURL             string
 	EmbedBaseURL           string
+	RefineBaseURL          string
 	LLMModel               string
 	ClassifyModel          string
+	RefineModel            string
 	EmbedModel             string
 	GroupClusterThreshold  float64
 	EmbedClassifyThreshold float64
@@ -21,8 +23,10 @@ func LoadShared() SharedConfig {
 		DatabaseURL:            GetEnv("DATABASE_URL", "postgresql://newsprism:newsprism@localhost:5432/newsprism"),
 		LLMBaseURL:             GetEnv("LLM_BASE_URL", "http://127.0.0.1:8081"),
 		EmbedBaseURL:           GetEnv("EMBED_BASE_URL", "http://127.0.0.1:8081"),
+		RefineBaseURL:          GetEnv("REFINE_BASE_URL", "http://127.0.0.1:8082"),
 		LLMModel:               GetEnv("LLM_MODEL", "gemma-4-E4B-it-Q8_0"),
 		ClassifyModel:          GetEnv("CLASSIFY_MODEL", "gemma-4-E4B-it-Q8_0"),
+		RefineModel:            GetEnv("REFINE_MODEL", ""),
 		EmbedModel:             GetEnv("EMBED_MODEL", "Targoyle/ruri-v3-310m-GGUF:Q8_0"),
 		GroupClusterThreshold:  GetFloat("GROUP_CLUSTER_THRESHOLD", 0.72),
 		EmbedClassifyThreshold: GetFloat("EMBED_CLASSIFY_THRESHOLD", 0.5),
