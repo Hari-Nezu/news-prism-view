@@ -83,7 +83,7 @@ export const ALL_FEED_SOURCES: FeedConfig[] = [
   {
     id: "sankei",
     name: "産経新聞",
-    url: "https://www.sankei.com/rss/news/flash.xml",
+    url: "https://rss.prod.skmediatool.com/sankei.xml",
     type: "rss",
     category: "総合",
     filterPolitical: false,

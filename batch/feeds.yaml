@@ -43,7 +43,7 @@ feeds:
     default_enabled: true
   - id: sankei
     name: "産経新聞"
-    url: "https://www.sankei.com/rss/news/flash.xml"
+    url: "https://rss.prod.skmediatool.com/sankei.xml"
     type: rss
     category: 総合
     filter_political: false

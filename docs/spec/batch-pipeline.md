@@ -355,7 +355,7 @@ Go の RSS パーサーで実装済みの箇所:
 ## 分類ステージ
 
 `classify.go` は embedding → LLM → キーワードの 3 フェーズカスケードで `category` / `subcategory` を決定する。  
-詳細は [classification-improvement.md](./classification-improvement.md) を参照。
+詳細は [news-categorization.md](./news-categorization.md) を参照。
 
 ---
 
