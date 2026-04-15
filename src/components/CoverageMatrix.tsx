@@ -7,7 +7,7 @@ import { getSourceColors } from "@/lib/source-colors";
 import { groupItemsBySource } from "@/lib/group-items-by-source";
 import MediaComparisonView from "@/components/MediaComparisonView";
 import { API_BASE } from "@/lib/api-url";
-import { MEDIA, countArticles } from "@/lib/media-matcher";
+import { MEDIA, countArticles, type MediaEntry } from "@/lib/media-matcher";
 
 import { formatRelative } from "@/lib/format-time";
 
@@ -25,6 +25,7 @@ interface Props {
 export default function CoverageMatrix({ groups }: Props) {
   const [selected, setSelected] = useState<NewsGroup | null>(null);
   const [overlayView, setOverlayView] = useState<OverlayView>({ type: "articles" });
+  const [hoveredMedia, setHoveredMedia] = useState<MediaEntry | null>(null);
   const [mounted, setMounted] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -136,6 +137,9 @@ export default function CoverageMatrix({ groups }: Props) {
         <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
           <span className="text-sm font-bold text-gray-700">報道カバレッジマトリクス</span>
           <span className="text-xs text-gray-400 ml-1">行クリックで記事一覧</span>
+          <span className="text-xs text-gray-500 ml-auto">
+            {hoveredMedia ? hoveredMedia.label : "列にカーソルで媒体名"}
+          </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
@@ -148,7 +152,12 @@ export default function CoverageMatrix({ groups }: Props) {
                   <th
                     key={m.short}
                     title={m.label}
-                    className="px-2 py-2 text-center text-xs font-bold text-gray-500 min-w-[36px]"
+                    tabIndex={0}
+                    onMouseEnter={() => setHoveredMedia(m)}
+                    onMouseLeave={() => setHoveredMedia((cur) => (cur?.short === m.short ? null : cur))}
+                    onFocus={() => setHoveredMedia(m)}
+                    onBlur={() => setHoveredMedia((cur) => (cur?.short === m.short ? null : cur))}
+                    className="px-2 py-2 text-center text-xs font-bold text-gray-500 min-w-[36px] outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2"
                   >
                     {m.short}
                   </th>
