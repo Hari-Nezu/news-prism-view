@@ -22,7 +22,7 @@ type namingResult struct {
 	Groups []groupNaming `json:"groups"`
 }
 
-const nameChunkSize = 15
+const nameChunkSize = 10
 
 // NameClusters calls LLM to assign Japanese titles to each cluster.
 // Singleton clusters are named via fallback without calling the LLM.
