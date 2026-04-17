@@ -1,6 +1,6 @@
 # newsprism-batch
 
-RSS収集 → embedding → 分類 → クラスタリング → 命名 → スナップショット保存、の6ステージバッチパイプライン。
+RSS収集 → embedding → 分類 → クラスタリング → 品質審査 → 命名 → スナップショット保存、の7ステージバッチパイプライン。
 
 設計経緯: [`docs/batch-pipeline-design.md`](../docs/batch-pipeline-design.md)
 
@@ -21,6 +21,7 @@ go run ./cmd/newsprism-batch serve
 | メソッド | パス | 説明 |
 |---------|------|------|
 | `POST` | `/run` | パイプライン手動実行 |
+| `POST` | `/rename` | 最新スナップショットのグループ名だけ再生成 |
 | `GET` | `/health` | ヘルスチェック |
 
 ---
@@ -32,11 +33,16 @@ go run ./cmd/newsprism-batch serve
 | `DATABASE_URL` | `postgresql://newsprism:newsprism@localhost:5432/newsprism` | PostgreSQL接続先 |
 | `LLM_BASE_URL` | `http://127.0.0.1:8081` | OpenAI互換LLMサーバー（命名・分類用） |
 | `EMBED_BASE_URL` | `http://127.0.0.1:8081` | 埋め込みモデル用サーバー |
+| `REFINE_BASE_URL` | `LLM_BASE_URL と同じ` | refine用LLMサーバー（別サーバーを使う場合のみ設定） |
 | `LLM_MODEL` | `gemma-4-E4B-it-Q8_0` | クラスタ命名用チャットモデル |
 | `CLASSIFY_MODEL` | `gemma-4-E4B-it-Q8_0` | 分類フォールバック用チャットモデル |
+| `REFINE_MODEL` | `LLM_MODEL と同じ` | refine用チャットモデル（別モデルを使う場合のみ設定） |
 | `EMBED_MODEL` | `Targoyle/ruri-v3-310m-GGUF:Q8_0` | 埋め込みモデル（310次元） |
 | `GROUP_CLUSTER_THRESHOLD` | `0.72` | クラスタリングのコサイン類似度閾値 |
 | `EMBED_CLASSIFY_THRESHOLD` | `0.5` | embedding分類の信頼度閾値（これ未満はLLMフォールバック） |
+| `REFINE_INTRA_THRESHOLD` | `0.93` | クラスタ内min類似度がこれ以上なら coherent とみなしLLM審査をスキップ |
+| `REFINE_INTER_THRESHOLD` | `0.92` | クラスタ間centroid類似度がこれ以上ならmerge候補としてLLM審査対象に |
+| `SKIP_REFINE` | `false` | `true` にするとrefineステップを完全スキップ（LLM負荷軽減・高速化） |
 | `TIME_DECAY_HALF_LIFE_HOURS` | `12.0` | ランキングの時間減衰半減期（時間） |
 | `BATCH_PORT` | `8090` | serveモードのポート |
 | `FEEDS_YAML_PATH` | `feeds.yaml` | フィード定義ファイルパス |
@@ -44,14 +50,14 @@ go run ./cmd/newsprism-batch serve
 
 ---
 
-## パイプライン（6ステージ）
+## パイプライン（7ステージ）
 
 ```
-collect → embed → classify → group → name → store
-   ↓                                          ↓
-RssArticle                            ProcessedSnapshot
-(embedding保存)                        ├─ SnapshotGroup
-                                       └─ SnapshotGroupItem
+collect → embed → classify → group → refine → name → store
+   ↓                                                    ↓
+RssArticle                                    ProcessedSnapshot
+(embedding保存)                                ├─ SnapshotGroup
+                                               └─ SnapshotGroupItem
 ```
 
 ### 1. collect
@@ -86,13 +92,28 @@ RssArticle                            ProcessedSnapshot
 - unknown カテゴリ（`""` または `"other"`）は例外レーン扱いで、unknown同士のみ結合可（閾値 +0.05）
 - embeddingなし記事は単独クラスタ扱い
 
-### 5. name
+### 5. refine
+
+- groupステップのクラスタに対してLLMによる品質審査を最大2ラウンド実施
+- **トリアージ**: embedding類似度でLLM不要なクラスタを事前除外（コスト削減）
+  - クラスタ内min類似度 ≥ `REFINE_INTRA_THRESHOLD` → coherentとみなしスキップ
+  - クラスタ間centroid類似度 > `REFINE_INTER_THRESHOLD` → merge候補としてLLM審査対象
+- **LLM審査（10クラスタ/チャンク）**: 各クラスタに `coherent / split / merge / move` の判定を付与
+- **revise**: actionable（非coherent）な判定に従いクラスタを修正
+  - `merge`: 2クラスタを統合
+  - `split`: 外れ記事を新クラスタに分離
+  - `move`: 特定記事を別クラスタへ移動
+- `SKIP_REFINE=true` で完全スキップ可能
+
+* 注意 LLMを利用してクラスタリングを改善する仕組みだが、うまく機能をしない上速度劣化が著しい
+
+### 6. name
 
 - クラスタ内の記事タイトル一覧をLLMに送信し、日本語タイトル（20文字以内）を生成
 - JSON形式で返却させる（`response_format: json_object`、temperature: 0.1）
 - LLM失敗時: 記事タイトルのn-gram（2〜6文字、50%以上出現）をフォールバック
 
-### 6. store
+### 7. store
 
 - クラスタをランク付け（複数媒体掲載 → 媒体数 → 記事数の順）
 - 媒体カバレッジ追跡: `coveredBy`（掲載媒体）、`silentMedia`（未掲載媒体）

@@ -79,9 +79,13 @@ func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.F
 	slog.Info("pipeline: group done", "clusters", len(clusters), "articles", len(articles))
 
 	// 5. refine
-	slog.Info("pipeline: refine start")
-	clusters = steps.RefineClusters(ctx, refineClient, clusters, cfg.RefineIntraThreshold, cfg.RefineInterThreshold)
-	slog.Info("pipeline: refine done", "clusters", len(clusters))
+	if cfg.SkipRefine {
+		slog.Info("pipeline: refine skipped (SKIP_REFINE=true)")
+	} else {
+		slog.Info("pipeline: refine start")
+		clusters = steps.RefineClusters(ctx, refineClient, clusters, cfg.RefineIntraThreshold, cfg.RefineInterThreshold)
+		slog.Info("pipeline: refine done", "clusters", len(clusters))
+	}
 
 	// 6. name
 	slog.Info("pipeline: name start")

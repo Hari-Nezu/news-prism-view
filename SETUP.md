@@ -34,6 +34,12 @@ ollama pull ruri-v3-310m
 docker compose -f docker-compose.local-ollama.yml up
 ```
 
+### B'. llama.cpp
+```
+./build/bin/llama-server --models-dir ./models --port 8082 -ngl 99 --ctx-size 32768 --reasoning-budget 524288
+./build/bin/llama-server --models-dir ./models --port 8081 -ngl 99 -rea off --embeddings
+```
+
 ---
 
 ### C. ローカル開発（コードを変更しながら使う）
@@ -89,6 +95,9 @@ cp .env.local.sample .env.local
 | `GROUP_CLUSTER_THRESHOLD` | `0.72` | バッチグループ化でのクラスタリング閾値（高いほど厳密） |
 | `FEED_GROUP_SIMILARITY_THRESHOLD` | `0.68` | インクリメンタルグループ化でのマッチング閾値 |
 | `EMBED_CLASSIFY_THRESHOLD` | `0.5` | embedding 分類の confidence 閾値（未満は LLM にエスカレーション） |
+| `REFINE_INTRA_THRESHOLD` | `0.93` | クラスタ内 min 類似度がこれ以上なら coherent とみなし LLM 審査をスキップ |
+| `REFINE_INTER_THRESHOLD` | `0.92` | クラスタ間 centroid 類似度がこれ以上なら merge 候補として LLM 審査対象に |
+| `SKIP_REFINE` | `false` | `true` にすると refine ステップ（クラスタ品質審査）を完全スキップ。LLM 負荷を下げたい場合や高速実行したい場合に使用 |
 
 ### その他
 
