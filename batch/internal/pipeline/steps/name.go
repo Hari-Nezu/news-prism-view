@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ikawaha/kagome-dict/ipa"
+	"github.com/ikawaha/kagome/v2/tokenizer"
 	"github.com/newsprism/shared/db"
 	"github.com/newsprism/shared/llm"
 )
@@ -23,6 +26,23 @@ type namingResult struct {
 }
 
 const nameChunkSize = 10
+
+var (
+	kagomeTok  *tokenizer.Tokenizer
+	kagomeOnce sync.Once
+)
+
+func getTokenizer() *tokenizer.Tokenizer {
+	kagomeOnce.Do(func() {
+		t, err := tokenizer.New(ipa.Dict(), tokenizer.OmitBosEos())
+		if err != nil {
+			slog.Error("kagome init failed", "err", err)
+			return
+		}
+		kagomeTok = t
+	})
+	return kagomeTok
+}
 
 // NameClusters calls LLM to assign Japanese titles to each cluster.
 // Singleton clusters are named via fallback without calling the LLM.
@@ -99,14 +119,8 @@ func nameChunk(ctx context.Context, chatClient *llm.ChatClient, clusters []Clust
 			titleParts = append(titleParts, "「"+a.Title+"」")
 		}
 
-		common := extractCommonKeywords(c.Articles)
-		commonLine := ""
-		if len(common) > 0 {
-			commonLine = "\n  共通キーワード: " + strings.Join(common, "・")
-		}
-
-		fmt.Fprintf(&clusterList, "グループ%d（%s）%s\n  記事: %s\n\n",
-			offset+i, cat, commonLine, strings.Join(titleParts, " "),
+		fmt.Fprintf(&clusterList, "グループ%d（%s）\n  記事: %s\n\n",
+			offset+i, cat, strings.Join(titleParts, " "),
 		)
 	}
 
@@ -118,7 +132,6 @@ func nameChunk(ctx context.Context, chatClient *llm.ChatClient, clusters []Clust
 - 固有名詞（人名・地名・組織名）は積極的に使う
 
 制約:
-- 「共通キーワード」に示した語を中心に命名する
 - グループ内の一部の記事にしか当てはまらない内容は含めない
 
 必ずJSON形式のみで回答してください。
@@ -217,37 +230,63 @@ func extractJSON(s string) string {
 	return s[start : end+1]
 }
 
-// extractCommonKeywords returns words appearing in ≥50% of article titles.
+// extractCommonKeywords returns nouns appearing in ≥50% of article titles,
+// using kagome morphological analysis. Returns nil if the tokenizer is unavailable.
 func extractCommonKeywords(articles []db.Article) []string {
 	if len(articles) <= 1 {
 		return nil
 	}
+	t := getTokenizer()
+	if t == nil {
+		return nil
+	}
+
 	threshold := len(articles)/2 + 1
+	type entry struct {
+		count int
+		token string
+	}
 	freq := make(map[string]int)
 
 	for _, a := range articles {
-		runes := []rune(a.Title)
+		tokens := t.Tokenize(a.Title)
 		seen := make(map[string]bool)
-		// Extract n-grams of length 2–6
-		for i := 0; i < len(runes); i++ {
-			for j := i + 2; j <= i+6 && j <= len(runes); j++ {
-				token := string(runes[i:j])
-				if !seen[token] {
-					freq[token]++
-					seen[token] = true
-				}
+		for _, tok := range tokens {
+			features := tok.Features()
+			if len(features) < 2 {
+				continue
+			}
+			// 名詞のみ。非自立・接尾・数は除外
+			if features[0] != "名詞" {
+				continue
+			}
+			sub := features[1]
+			if sub == "非自立" || sub == "接尾" || sub == "数" {
+				continue
+			}
+			surface := tok.Surface
+			if !seen[surface] {
+				freq[surface]++
+				seen[surface] = true
 			}
 		}
 	}
 
-	var common []string
+	var entries []entry
 	for token, count := range freq {
 		if count >= threshold {
-			common = append(common, token)
+			entries = append(entries, entry{count, token})
 		}
 	}
-	if len(common) > 6 {
-		common = common[:6]
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].count > entries[j].count
+	})
+	if len(entries) > 6 {
+		entries = entries[:6]
+	}
+	common := make([]string, len(entries))
+	for i, e := range entries {
+		common[i] = e.token
 	}
 	return common
 }
