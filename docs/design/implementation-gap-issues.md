@@ -2,8 +2,8 @@
 
 ## 未実装だが issue 化すべき内容
 
-- Go / Next.js で分裂している feed 定義の単一ソース化
-- ~~CoverageMatrix オーバーレイからの直接比較導線~~ → 実装済み（`spec/coverage-matrix-overlay-compare.md`）
+- ~~Go / Next.js で分裂している feed 定義の単一ソース化~~ (一部進行中: `feeds.yaml` と `feed-configs.ts` は同期されている)
+- CoverageMatrix オーバーレイからの直接比較導線 → 実装済み（`spec/coverage-matrix-overlay-compare.md`）
 - inspect の override / feedback / 専用詳細画面
 - `NewsGroup.topic` の整理
 - summary snapshot への 3軸/consensus/divergence 追加

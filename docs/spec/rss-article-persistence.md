@@ -5,7 +5,7 @@
 RSS 由来の記事は `rss_articles` に保存している。  
 保持期間は 3 ヶ月、グルーピング用の参照窓は主に直近 3 日。
 
-現在は **Next.js 側の `src/lib/db.ts` と Go バッチ側の両方** が `rss_articles` を触る。
+以前は Next.js 側からも直接 DB を操作していたが、現在は **Go API サーバー** が一元的に `rss_articles` を管理し、Next.js フロントエンドは API 経由でデータを取得する。
 
 ---
 

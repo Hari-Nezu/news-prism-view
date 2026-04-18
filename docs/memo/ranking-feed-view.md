@@ -1,6 +1,8 @@
-## ランキング型グループ表示
+## ランキング型グループ表示 — 【DONE】
 
 記事数（媒体数）に応じてカードサイズを変え、ニュースのボリューム感を一目で伝える。
+
+`RankingHeroCard`, `RankingMediumCard`, `RankingCompactItem` 等が実装済み。
 
 ### コンポーネント構成
 
