@@ -6,11 +6,7 @@ import (
 	"github.com/newsprism/shared/db"
 )
 
-const (
-	categoryOther                  = "other"
-	unknownCategoryThresholdOffset = 0.05
-	crossCategoryThresholdOffset   = 0.08
-)
+const categoryOther = "other"
 
 // Cluster represents a group of articles with a centroid embedding.
 type Cluster struct {
@@ -19,14 +15,10 @@ type Cluster struct {
 	DomCate  string
 }
 
-func isUnknownCategory(cat string) bool {
-	return cat == "" || cat == categoryOther
-}
-
 // GroupArticles performs greedy cosine similarity clustering.
 // Articles without embeddings are placed in single-article clusters.
-// Unknown vs known category pairs are hard-blocked.
-// Known category mismatches require a higher similarity threshold (soft gate).
+// Category is not used as a gate — grouping is based purely on embedding similarity.
+// Category is assigned post-hoc via dominantCate.
 func GroupArticles(articles []db.Article, threshold float64) []Cluster {
 	var clusters []Cluster
 
@@ -44,21 +36,8 @@ func GroupArticles(articles []db.Article, threshold float64) []Cluster {
 			if len(c.Centroid) == 0 {
 				continue
 			}
-
-			articleUnknown := isUnknownCategory(a.Category)
-			clusterUnknown := isUnknownCategory(c.DomCate)
-			effectiveThreshold := threshold
-			if articleUnknown || clusterUnknown {
-				if !(articleUnknown && clusterUnknown) {
-					continue // unknown vs known: hard block
-				}
-				effectiveThreshold += unknownCategoryThresholdOffset
-			} else if a.Category != c.DomCate {
-				effectiveThreshold += crossCategoryThresholdOffset
-			}
-
 			sim := float64(cosineSimilarity(a.Embedding, c.Centroid))
-			if sim > effectiveThreshold && sim > bestSim {
+			if sim > threshold && sim > bestSim {
 				bestIdx, bestSim = i, sim
 			}
 		}
@@ -126,7 +105,7 @@ func dominantCate(articles []db.Article) string {
 	counts := make(map[string]int)
 	for _, a := range articles {
 		cat := a.Category
-		if isUnknownCategory(cat) {
+		if cat == "" {
 			cat = categoryOther
 		}
 		counts[cat]++

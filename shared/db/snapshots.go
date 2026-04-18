@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -394,9 +395,36 @@ func RecomputeGroupInspect(ctx context.Context, pool *pgxpool.Pool, snapshotID, 
 		HasCentroid:   len(centroid) > 0,
 	}
 
+	// Fetch nearest neighbors for all articles concurrently
+	type neighborResult struct {
+		idx       int
+		neighbors []SimilarArticleWithGroup
+	}
+	var wg sync.WaitGroup
+	neighborCh := make(chan neighborResult, len(detail.Articles))
+	for i, a := range detail.Articles {
+		emb, hasEmb := embedMap[a.URL]
+		if !hasEmb || len(centroid) == 0 {
+			continue
+		}
+		wg.Add(1)
+		go func(idx int, embedding []float32, excludeURL string) {
+			defer wg.Done()
+			neighbors, _ := FindSimilarArticlesWithGroup(ctx, pool, embedding, excludeURL, 5, snapshotID)
+			neighborCh <- neighborResult{idx: idx, neighbors: neighbors}
+		}(i, emb, a.URL)
+	}
+	wg.Wait()
+	close(neighborCh)
+
+	neighborsByIdx := make(map[int][]SimilarArticleWithGroup)
+	for nr := range neighborCh {
+		neighborsByIdx[nr.idx] = nr.neighbors
+	}
+
 	sim := ThresholdSimulation{Threshold: threshold}
 
-	for _, a := range detail.Articles {
+	for i, a := range detail.Articles {
 		ar := RecomputeArticleResult{
 			URL:                 a.URL,
 			Title:               a.Title,
@@ -430,8 +458,7 @@ func RecomputeGroupInspect(ctx context.Context, pool *pgxpool.Pool, snapshotID, 
 				sim.WouldLeave++
 			}
 
-			// Nearest neighbors
-			neighbors, _ := FindSimilarArticlesWithGroup(ctx, pool, emb, a.URL, 5, snapshotID)
+			neighbors := neighborsByIdx[i]
 			for _, n := range neighbors {
 				nb := RecomputeNeighbor{
 					URL:        n.URL,
