@@ -93,15 +93,6 @@ func pickBestRef(vec []float32, refs []subRef) (subRef, float64) {
 
 // ── LLM 分類 ─────────────────────────────────────────────────────────────────
 
-var systemPrompt = fmt.Sprintf(`あなたはニュース分類の専門家です。
-与えられたニュース記事を以下の分類基準に基づいて正確に分類してください。
-
-%s
-
-## ルール
-- 必ずJSON形式のみで回答する（説明文不要）
-- category と subcategory は英語IDを使用する
-- confidence は 0.0〜1.0 で回答する`, taxonomy.BuildClassificationGuide())
 
 type llmResult struct {
 	Category    string  `json:"category"`
@@ -135,7 +126,7 @@ func classifyBatchLLM(ctx context.Context, chatClient *llm.ChatClient, articles 
 	}
 	userMsg := fmt.Sprintf("以下の%d件の記事を分類してください。\n\n%s", len(articles), strings.Join(lines, "\n"))
 
-	raw, err := chatClient.CompleteJSON(ctx, systemPrompt, userMsg)
+	raw, err := chatClient.CompleteJSON(ctx, classifySystemPrompt, userMsg)
 	if err != nil {
 		slog.Warn("classify LLM batch failed", "err", err)
 		return nil

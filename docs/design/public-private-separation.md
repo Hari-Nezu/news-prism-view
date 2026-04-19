@@ -1,118 +1,179 @@
 # Public / Private 分離設計
 
-## 現状
+## 方針
 
-まだ public / private 分離は実装していない。  
-現在は単一の Next.js アプリに、公開UI候補と内部運用UIが同居している。
+単一コードベースから **2つの独立したデプロイ** を生成する。
 
-加えて、Go バッチは別プロセスとして存在する。
+- **Public**: 公開URL。`/ranking` のみ提供
+- **Private**: 関係者のみ知るURLにデプロイ。全ページ提供。認証なし
+
+認証ではなく **デプロイ先の分離** で保護する。
 
 ```text
-[Browser]
+[一般ユーザー]
    ↓
-[Next.js]
-   ├─ /ranking, /inspect, /compare, /youtube
-   ├─ /api/batch/latest, /api/batch/history, /api/batch/run
-   └─ /api/analyze, /api/rss, /api/compare/analyze ...
+[Public デプロイ]          ← DEPLOY_MODE=public
+   └─ /ranking のみ
+        ↓
+   [API サーバー]
+        ↓
+   [PostgreSQL]
+
+[関係者]
    ↓
-[PostgreSQL]
-   ↑
-[Go Batch]
+[Private デプロイ]         ← DEPLOY_MODE 未設定
+   ├─ /
+   ├─ /ranking
+   ├─ /compare
+   ├─ /youtube
+   └─ /inspect
+        ↓
+   [API サーバー] ← [Go Batch]
+        ↓
+   [PostgreSQL]
 ```
 
 ---
 
-## 既に public 寄りの機能
+## ルート分類
 
-次の機能は、将来的に public 側へ切り出しやすい。
+### Public（公開）
 
-- `/ranking`
-- `GET /api/batch/latest`
-- `GET /api/batch/history`
-- カバレッジマトリクス
-- snapshot 一覧・詳細表示
+| ルート | 役割 | API 依存 |
+|:--|:--|:--|
+| `/ranking` | バッチ結果・スナップショット表示 | `GET /api/batch/latest` |
 
-これらは主にスナップショットの読み取りで成立する。
+snapshot の読み取りで完結。LLM 不要。
 
----
+public ビルドでは以下の UI 要素を非表示にする:
 
-## 既に internal 寄りの機能
+- internal ページへのリンク（`/`, `/compare`）
+- `OllamaStatus` コンポーネント
+- バッチ実行ボタン
 
-次の機能は LLM や内部操作に依存しており、現状では internal 寄り。
+### Private（関係者限定）
 
-- `POST /api/analyze`
-- `POST /api/rss`
-- `/compare`
-- `/youtube`
-- `/inspect`
-- `POST /api/batch/run`
-- Go バッチサーバー `:8090`
-
----
-
-## 重要な現実
-
-### 1. DB名は既に `snake_case`
-
-複製対象や read-only ユーザー付与を考える時は、物理テーブル名は次を使う。
-
-- `processed_snapshots`
-- `snapshot_groups`
-- `snapshot_group_items`
-- `rss_articles`
-- `articles`
-- `compare_sessions`
-- `compare_results`
-- `compare_group_records`
-- `youtube_videos`
-
-### 2. 生SQL依存がある
-
-Prisma だけでなく raw SQL もあるため、public 側を切る時は DB名の前提を合わせる必要がある。
-
-### 3. Edge 前提ではない
-
-現行の DB アクセスは `PrismaClient` + `@prisma/adapter-pg` + `pg` で動いている。  
-そのまま「Edge Runtime で軽く動く」とはまだ言えない。
+| ルート | 役割 |
+|:--|:--|
+| `/` | 記事URL入力 → LLM 多軸スコアリング |
+| `/ranking` | バッチ結果表示（バッチ実行ボタンあり） |
+| `/compare` | 同一ニュースの媒体比較分析（LLM） |
+| `/youtube` | YouTube 字幕分析（LLM） |
+| `/inspect` | DB・スナップショット診断 / 再計算 |
 
 ---
 
-## 分離案
+## ファイル構成
 
-### Public
+```
+src/
+├── middleware.ts             # DEPLOY_MODE による route 制御
+├── lib/
+│   └── deploy-mode.ts       # IS_PUBLIC 定数（クライアント用）
+└── app/
+    ├── layout.tsx
+    ├── globals.css
+    ├── (public)/
+    │   └── ranking/
+    │       └── page.tsx      # → /ranking
+    └── (internal)/
+        ├── page.tsx          # → /
+        ├── compare/
+        │   └── page.tsx      # → /compare
+        ├── youtube/
+        │   └── page.tsx      # → /youtube
+        └── inspect/
+            └── page.tsx      # → /inspect
+```
 
-- snapshot 読み取り専用
-- DB は read-only
-- LLM 不要
-- `/ranking` 相当の表示中心
-
-### Internal
-
-- 記事分析
-- RSS取得
-- compare
-- youtube
-- inspect
-- batch run
-- Go バッチ運用
+route group はURLに影響しない。
 
 ---
 
-## DB分離案
+## 環境変数
 
-### 案A: read replica
+### ビルド時（`NEXT_PUBLIC_*`）
 
-public 側は snapshot 系だけ読む。
+| 変数 | 値 | 用途 |
+|:--|:--|:--|
+| `NEXT_PUBLIC_DEPLOY_MODE` | `public` or 未設定 | クライアント側 UI 分岐 |
+| `NEXT_PUBLIC_API_URL` | API サーバーURL | API エンドポイント |
 
-複製候補:
+### ランタイム（サーバー側）
 
-- `processed_snapshots`
-- `snapshot_groups`
-- `snapshot_group_items`
+| 変数 | 値 | 用途 |
+|:--|:--|:--|
+| `DEPLOY_MODE` | `public` or 未設定 | middleware でのルート制御 |
 
-### 案B: 同一DBの read-only user
+### 設定例
 
-小規模ならこれでも足りる。
+**Public ビルド:**
+
+```env
+NEXT_PUBLIC_DEPLOY_MODE=public
+NEXT_PUBLIC_API_URL=https://api.example.com
+DEPLOY_MODE=public
+```
+
+**Private ビルド:**
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8091
+```
+
+---
+
+## ルート制御（middleware）
+
+```
+リクエスト
+  ↓
+DEPLOY_MODE=public ?
+  ├─ YES → /ranking ? → 通過 / それ以外 → 404
+  └─ NO  → 全ルート通過
+```
+
+---
+
+## ビルド・デプロイ
+
+### Docker
+
+```dockerfile
+ARG NEXT_PUBLIC_DEPLOY_MODE=
+ENV NEXT_PUBLIC_DEPLOY_MODE=$NEXT_PUBLIC_DEPLOY_MODE
+```
+
+```bash
+# Public
+docker build --build-arg NEXT_PUBLIC_DEPLOY_MODE=public \
+             --build-arg NEXT_PUBLIC_API_URL=https://api.example.com \
+             -t newsprism-public .
+
+# Private
+docker build --build-arg NEXT_PUBLIC_API_URL=http://api-server:8091 \
+             -t newsprism-private .
+```
+
+---
+
+## 将来の検討事項（未実装）
+
+### API サーバー側の制御
+
+Public 向け API サーバーでは書き込み系エンドポイントを無効化する案:
+
+- `POST /api/batch/run` → 拒否
+- `POST /api/analyze` → 拒否
+- `GET /api/batch/latest` → 許可
+
+### DB 分離
+
+#### 案A: read replica
+
+public API は snapshot 系テーブルのみ参照する replica を使用。
+
+#### 案B: read-only user（小規模向け）
 
 ```sql
 CREATE ROLE public_reader WITH LOGIN PASSWORD '***';
@@ -121,11 +182,4 @@ GRANT USAGE ON SCHEMA public TO public_reader;
 GRANT SELECT ON processed_snapshots, snapshot_groups, snapshot_group_items TO public_reader;
 ```
 
----
-
-## 現在の結論
-
-- 分離構想自体は妥当
-- ただしまだ実装していない
-- 現時点で public に寄せやすいのは snapshot 読み取り系
-- internal に残すべきものは LLM / batch 操作 / 点検UI
+現時点では Next.js が DB に直接アクセスしていないため、API サーバー側で制御すれば足りる。

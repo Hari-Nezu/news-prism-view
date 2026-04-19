@@ -220,28 +220,11 @@ func critiqueChunk(ctx context.Context, chatClient *llm.ChatClient, clusters []C
 		}
 	}
 
-	const system = `あなたはニュースクラスタの品質審査員です。各クラスタについて以下を判定してください。
-
-判定種別:
-- coherent: クラスタ内の記事がすべて同一のニューストピックを報じている
-- split: クラスタ内に明らかに異なるトピックの記事が混在している（outlier_indicesに該当記事の番号[N]を列挙）
-- merge: このクラスタは隣接クラスタと実質的に同じトピックを扱っている（target_idxに統合先クラスタ番号を指定）
-- move: 特定の記事が別クラスタに属すべきである（outlier_indicesに記事番号[N]、target_idxに移動先クラスタ番号を指定）
-
-注意:
-- 1記事のみのクラスタは coherent と判定する
-- merge/moveのtarget_idxは「隣接クラスタ」に存在するクラスタ番号のみ指定する
-- 批評対象クラスタをすべて評価し、評価漏れを作らない
-
-必ずJSON形式のみで回答してください。
-出力フォーマット: { "critiques": [{ "cluster_idx": 0, "verdict": "coherent", "reason": "理由" }, ...] }
-split/moveの例: { "cluster_idx": 2, "verdict": "split", "reason": "...", "outlier_indices": [1, 3] }`
-
 	prompt := sb.String()
 	t0 := time.Now()
 	slog.Debug("refine chunk start", "targets", len(targetIdxs), "prompt_bytes", len(prompt))
 
-	content, err := chatClient.Complete(ctx, system, prompt, 8192)
+	content, err := chatClient.Complete(ctx, refineSystemPrompt, prompt, 8192)
 	if err != nil {
 		slog.Warn("refine: LLM error, skipping chunk", "err", err, "targets", targetIdxs, "elapsed_ms", time.Since(t0).Milliseconds())
 		return nil

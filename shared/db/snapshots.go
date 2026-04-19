@@ -22,16 +22,17 @@ type Snapshot struct {
 }
 
 type SnapshotGroup struct {
-	ID           string              `json:"id"`
-	SnapshotID   string              `json:"snapshotId"`
-	GroupTitle   string              `json:"groupTitle"`
-	Category     string              `json:"category"`
-	Subcategory  string              `json:"subcategory"`
-	Rank         int                 `json:"rank"`
-	SingleOutlet bool                `json:"singleOutlet"`
-	CoveredBy    []string            `json:"coveredBy"`
-	SilentMedia  []string            `json:"silentMedia"`
-	Items        []SnapshotGroupItem `json:"items"`
+	ID             string              `json:"id"`
+	SnapshotID     string              `json:"snapshotId"`
+	GroupTitle     string              `json:"groupTitle"`
+	Category       string              `json:"category"`
+	Subcategory    string              `json:"subcategory"`
+	Rank           int                 `json:"rank"`
+	SingleOutlet   bool                `json:"singleOutlet"`
+	CoveredBy      []string            `json:"coveredBy"`
+	SilentMedia    []string            `json:"silentMedia"`
+	ConsensusPoints json.RawMessage    `json:"consensusPoints,omitempty"`
+	Items          []SnapshotGroupItem `json:"items"`
 }
 
 type SnapshotGroupItem struct {
@@ -67,13 +68,14 @@ func SaveSnapshot(ctx context.Context, pool *pgxpool.Pool, snap Snapshot) (strin
 	for i, g := range snap.Groups {
 		coveredJSON, _ := json.Marshal(g.CoveredBy)
 		silentJSON, _ := json.Marshal(g.SilentMedia)
+		consensusPointsJSON := nullJSON(g.ConsensusPoints)
 		var gid string
 		err = tx.QueryRow(ctx, `
-			INSERT INTO snapshot_groups (snapshot_id, group_title, category, subcategory, rank, single_outlet, covered_by, silent_media)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			INSERT INTO snapshot_groups (snapshot_id, group_title, category, subcategory, rank, single_outlet, covered_by, silent_media, consensus_points)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			RETURNING id`,
 			id, g.GroupTitle, nullStr(g.Category), nullStr(g.Subcategory),
-			i+1, g.SingleOutlet, coveredJSON, silentJSON,
+			i+1, g.SingleOutlet, coveredJSON, silentJSON, consensusPointsJSON,
 		).Scan(&gid)
 		if err != nil {
 			return "", fmt.Errorf("insert group %d: %w", i, err)
@@ -121,7 +123,7 @@ func GetLatestSnapshotWithGroups(ctx context.Context, pool *pgxpool.Pool) (*Snap
 	}
 
 	rows, err := pool.Query(ctx, `
-		SELECT id, group_title, COALESCE(category,''), COALESCE(subcategory,''), rank, single_outlet, covered_by, silent_media
+		SELECT id, group_title, COALESCE(category,''), COALESCE(subcategory,''), rank, single_outlet, covered_by, silent_media, consensus_points
 		FROM snapshot_groups
 		WHERE snapshot_id = $1
 		ORDER BY rank ASC`,
@@ -137,7 +139,8 @@ func GetLatestSnapshotWithGroups(ctx context.Context, pool *pgxpool.Pool) (*Snap
 	for rows.Next() {
 		var g SnapshotGroup
 		var coveredJSON, silentJSON []byte
-		err := rows.Scan(&g.ID, &g.GroupTitle, &g.Category, &g.Subcategory, &g.Rank, &g.SingleOutlet, &coveredJSON, &silentJSON)
+		var consensusPointsJSON []byte
+		err := rows.Scan(&g.ID, &g.GroupTitle, &g.Category, &g.Subcategory, &g.Rank, &g.SingleOutlet, &coveredJSON, &silentJSON, &consensusPointsJSON)
 		if err != nil {
 			return nil, err
 		}
@@ -146,6 +149,9 @@ func GetLatestSnapshotWithGroups(ctx context.Context, pool *pgxpool.Pool) (*Snap
 		}
 		if err := json.Unmarshal(silentJSON, &g.SilentMedia); err != nil {
 			return nil, fmt.Errorf("unmarshal silent_media: %w", err)
+		}
+		if len(consensusPointsJSON) > 0 {
+			g.ConsensusPoints = json.RawMessage(consensusPointsJSON)
 		}
 		groupIndexMap[g.ID] = len(snap.Groups)
 		groupIDs = append(groupIDs, g.ID)
