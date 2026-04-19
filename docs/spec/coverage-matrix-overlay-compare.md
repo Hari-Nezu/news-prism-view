@@ -12,7 +12,7 @@ CoverageMatrix のオーバーレイ内から直接 LLM 比較を実行できる
 - `articles / analyzing / results / error` の view state 管理
 - `/api/compare/analyze` SSE による分析進捗表示
 - 結果表示時に `MediaComparisonView` を埋め込み
-- オーバーレイを比較結果に応じて `max-w-5xl` へ拡張
+- オーバーレイを `max-w-3xl` で表示（記事一覧・比較結果共通）
 - `AbortController` による SSE 中断
 
 ## 制約

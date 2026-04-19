@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"math"
 	"strconv"
 	"strings"
@@ -11,6 +12,13 @@ func nullStr(s string) any {
 		return nil
 	}
 	return s
+}
+
+func nullJSON(b json.RawMessage) any {
+	if len(b) == 0 {
+		return nil
+	}
+	return []byte(b)
 }
 
 func parseVectorStr(s string) []float32 {

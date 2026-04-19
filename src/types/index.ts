@@ -41,6 +41,11 @@ export interface RssFeedItem {
 
 // ── メディア比較ページ用 ──────────────────────────────
 
+export interface ConsensusPoint {
+  fact: string;
+  sources: string[];
+}
+
 /** Ollamaがグループ化した「同一ニュース」のひとまとまり */
 export interface NewsGroup {
   groupTitle: string;        // LLMが命名した具体的なイベント名（= topic）
@@ -50,10 +55,11 @@ export interface NewsGroup {
   category?: string;         // グループ内の支配的大分類（"politics" | "economy" | ...）
   subcategory?: string;      // グループ内の支配的中分類
   // SnapshotGroup 由来フィールド（/inspect ページで使用）
-  id?:          string;
-  rank?:        number;
-  coveredBy?:   string[];
-  silentMedia?: string[];
+  id?:               string;
+  rank?:             number;
+  coveredBy?:        string[];
+  silentMedia?:      string[];
+  consensusPoints?:  ConsensusPoint[];
 }
 
 // ── マルチモデル分析 ─────────────────────────────────

@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"sort"
 	"time"
@@ -18,8 +19,9 @@ var allBiasMediaSources = []string{
 }
 
 // Store saves clusters as a ProcessedSnapshot to the database.
-func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []string, durationMs int, halfLifeHours float64) (string, error) {
+func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []string, consensus []ConsensusResult, durationMs int, halfLifeHours float64) (string, error) {
 	type ranked struct {
+		origIdx      int
 		cluster      Cluster
 		title        string
 		singleOutlet bool
@@ -58,6 +60,7 @@ func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []stri
 		timeScore := math.Exp(-lambda * ageHours)
 
 		items[i] = ranked{
+			origIdx:      i,
 			cluster:      c,
 			title:        titles[i],
 			singleOutlet: sourceCount <= 1,
@@ -103,7 +106,7 @@ func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []stri
 			}
 		}
 
-		groups[i] = db.SnapshotGroup{
+		g := db.SnapshotGroup{
 			GroupTitle:   r.title,
 			Category:     r.cluster.DomCate,
 			Rank:         i + 1,
@@ -112,6 +115,12 @@ func Store(ctx context.Context, pool *db.Pool, clusters []Cluster, titles []stri
 			SilentMedia:  silent,
 			Items:        groupItems,
 		}
+		if r.origIdx < len(consensus) {
+			if b, err := json.Marshal(consensus[r.origIdx].Points); err == nil {
+				g.ConsensusPoints = b
+			}
+		}
+		groups[i] = g
 	}
 
 	snap := db.Snapshot{

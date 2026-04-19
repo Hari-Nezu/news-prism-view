@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/newsprism/batch/internal/config"
+	"github.com/newsprism/batch/internal/pipeline/steps"
 	"github.com/newsprism/shared/db"
 	"github.com/newsprism/shared/llm"
-	"github.com/newsprism/batch/internal/pipeline/steps"
 )
 
 // Result summarises a pipeline run.
@@ -21,7 +21,7 @@ type Result struct {
 	Error        string `json:"error,omitempty"`
 }
 
-// Run executes the full pipeline: collect → embed → classify → group → refine → name → store.
+// Run executes the full pipeline: collect → embed → classify → group → refine → name → consensus → store.
 func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.FeedConfig) Result {
 	start := time.Now()
 
@@ -34,9 +34,13 @@ func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.F
 	}
 	defer db.ReleasePipelineLock(ctx, pool)
 
-	embedClient    := llm.NewEmbedClient(cfg.EmbedBaseURL, cfg.EmbedModel)
-	chatClient     := llm.NewChatClient(cfg.LLMBaseURL, cfg.LLMModel)
+	embedClient := llm.NewEmbedClient(cfg.EmbedBaseURL, cfg.EmbedModel)
+	chatClient := llm.NewChatClient(cfg.LLMBaseURL, cfg.LLMModel)
 	classifyClient := llm.NewChatClient(cfg.LLMBaseURL, cfg.ClassifyModel)
+
+	slog.Info("pipeline: embedModel:", cfg.EmbedModel)
+	slog.Info("pipeline: llmModel:", cfg.LLMModel)
+	slog.Info("pipeline: classifyModel:", cfg.ClassifyModel)
 
 	refineBaseURL := cfg.RefineBaseURL
 	if refineBaseURL == "" {
@@ -91,10 +95,14 @@ func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.F
 	slog.Info("pipeline: name start")
 	titles := steps.NameClusters(ctx, chatClient, clusters)
 
-	// 7. store
+	// 7. consensus
+	slog.Info("pipeline: consensus start")
+	consensus := steps.ComputeConsensus(ctx, chatClient, clusters)
+
+	// 8. store
 	slog.Info("pipeline: store start")
 	elapsed := int(time.Since(start).Milliseconds())
-	snapshotID, err := steps.Store(ctx, pool, clusters, titles, elapsed, cfg.TimeDecayHalfLifeHours)
+	snapshotID, err := steps.Store(ctx, pool, clusters, titles, consensus, elapsed, cfg.TimeDecayHalfLifeHours)
 	if err != nil {
 		return partialResult(start, "store failed: "+err.Error())
 	}

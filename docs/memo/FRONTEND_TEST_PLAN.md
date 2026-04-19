@@ -20,17 +20,17 @@
 ページ/コンポーネント内のクロージャ関数を `src/lib/` に抽出し、純粋関数としてテスト。
 既存の `environment: "node"` のまま動作する。
 
-### 1-1. 抽出対象と抽出先
+### 1-1. 抽出対象と抽出先 — 【DONE】
 
-| 抽出元 | 関数 | 抽出先 |
-|:--|:--|:--|
-| `app/page.tsx` | `findDuplicateIndex` | `src/lib/find-duplicate.ts` |
-| `app/page.tsx` | `computeMultiModelAnalysis` | `src/lib/multi-model-analysis.ts` |
-| `app/inspect/page.tsx`, `app/ranking/page.tsx`, `components/CoverageMatrix.tsx`, `components/RssFeedPanel.tsx` | `formatRelative` / `formatDateTime` | `src/lib/format-time.ts` |
-| `components/CoverageMatrix.tsx` | `sortGroups` | `src/lib/sort-groups.ts` |
-| `components/CoverageMatrix.tsx` | `countArticles` + `MEDIA` 定数 | `src/lib/media-matcher.ts` |
-| `components/RssFeedPanel.tsx` (loadFeeds 内) | URL dedup + 時系列ソート | `src/lib/dedup-feed-items.ts` |
-| 全ページ共通の SSE パースパターン | SSE buffer → parsed events | `src/lib/parse-sse.ts` |
+| 抽出元 | 関数 | 抽出先 | ステータス |
+|:--|:--|:--|:--|
+| `app/page.tsx` | `findDuplicateIndex` | `src/lib/find-duplicate.ts` | DONE |
+| `app/page.tsx` | `computeMultiModelAnalysis` | `src/lib/multi-model-analysis.ts` | DONE |
+| `app/inspect/page.tsx`, `app/ranking/page.tsx`, `components/CoverageMatrix.tsx`, `components/RssFeedPanel.tsx` | `formatRelative` / `formatDateTime` | `src/lib/format-time.ts` | DONE |
+| `components/CoverageMatrix.tsx` | `sortGroups` | `src/lib/sort-groups.ts` | DONE |
+| `components/CoverageMatrix.tsx` | `countArticles` + `MEDIA` 定数 | `src/lib/media-matcher.ts` | DONE |
+| `components/RssFeedPanel.tsx` (loadFeeds 内) | URL dedup + 時系列ソート | `src/lib/dedup-feed-items.ts` | DONE |
+| 全ページ共通の SSE パースパターン | SSE buffer → parsed events | `src/lib/parse-sse.ts` | DONE |
 
 ### 1-2. テストファイルと仕様
 

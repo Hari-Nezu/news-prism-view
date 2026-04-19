@@ -6,6 +6,7 @@ import type { NewsGroup, AnalyzedArticle } from "@/types";
 import { getSourceColors } from "@/lib/source-colors";
 import { groupItemsBySource } from "@/lib/group-items-by-source";
 import MediaComparisonView from "@/components/MediaComparisonView";
+import ConsensusPointsView from "@/components/ConsensusPointsView";
 import { API_BASE } from "@/lib/api-url";
 import { MEDIA, countArticles, type MediaEntry } from "@/lib/media-matcher";
 
@@ -258,49 +259,53 @@ export default function CoverageMatrix({ groups }: Props) {
             {/* ボディ */}
             <div className="overflow-y-auto flex-1">
               {overlayView.type === "articles" && (
-                <div className="p-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {Array.from(groupItemsBySource(selected.items ?? [])).map(([source, items]) => {
-                      const colors = getSourceColors(source);
-                      return (
-                        <div
-                          key={source}
-                          className="border border-gray-100 rounded-lg overflow-hidden"
-                          style={{ borderLeftColor: colors.dotColor, borderLeftWidth: "3px" }}
-                        >
-                          <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50/60">
-                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: colors.dotColor }} />
-                            <span className="text-[11px] font-bold truncate" style={{ color: colors.textColor }}>{source}</span>
-                            <span className="text-[10px] text-gray-400 ml-auto flex-shrink-0">{items.length}件</span>
-                          </div>
-                          <div className="divide-y divide-gray-50">
-                            {items.map((item, i) => (
-                              <div key={i} className="px-3 py-2 hover:bg-blue-50/60 transition-colors">
-                                {item.publishedAt && (
-                                  <div className="text-[10px] text-gray-400 mb-0.5">{formatRelative(item.publishedAt)}</div>
-                                )}
-                                <div className="flex items-start gap-2">
-                                  <p className="flex-1 text-xs text-gray-800 line-clamp-2 leading-snug">{item.title}</p>
-                                  {item.url && (
-                                    <a
-                                      href={item.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-[10px] text-gray-400 hover:text-gray-600 flex-shrink-0 mt-0.5"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      ↗
-                                    </a>
+                (selected.consensusPoints && selected.consensusPoints.length > 0) ? (
+                  <ConsensusPointsView group={selected} />
+                ) : (
+                  <div className="p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {Array.from(groupItemsBySource(selected.items ?? [])).map(([source, items]) => {
+                        const colors = getSourceColors(source);
+                        return (
+                          <div
+                            key={source}
+                            className="border border-gray-100 rounded-lg overflow-hidden"
+                            style={{ borderLeftColor: colors.dotColor, borderLeftWidth: "3px" }}
+                          >
+                            <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50/60">
+                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: colors.dotColor }} />
+                              <span className="text-[11px] font-bold truncate" style={{ color: colors.textColor }}>{source}</span>
+                              <span className="text-[10px] text-gray-400 ml-auto flex-shrink-0">{items.length}件</span>
+                            </div>
+                            <div className="divide-y divide-gray-50">
+                              {items.map((item, i) => (
+                                <div key={i} className="px-3 py-2 hover:bg-blue-50/60 transition-colors">
+                                  {item.publishedAt && (
+                                    <div className="text-[10px] text-gray-400 mb-0.5">{formatRelative(item.publishedAt)}</div>
                                   )}
+                                  <div className="flex items-start gap-2">
+                                    <p className="flex-1 text-xs text-gray-800 line-clamp-2 leading-snug">{item.title}</p>
+                                    {item.url && (
+                                      <a
+                                        href={item.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] text-gray-400 hover:text-gray-600 flex-shrink-0 mt-0.5"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        ↗
+                                      </a>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )
               )}
 
               {overlayView.type === "analyzing" && (

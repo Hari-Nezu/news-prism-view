@@ -19,8 +19,8 @@ type Config struct {
 func Load() Config {
 	return Config{
 		SharedConfig:           config.LoadShared(),
-		GroupClusterThreshold:  config.GetFloat("GROUP_CLUSTER_THRESHOLD", 0.91),
-		EmbedClassifyThreshold: config.GetFloat("EMBED_CLASSIFY_THRESHOLD", 0.5),
+		GroupClusterThreshold:  config.GetFloat("GROUP_CLUSTER_THRESHOLD", 0.90),
+		EmbedClassifyThreshold: config.GetFloat("EMBED_CLASSIFY_THRESHOLD", 0.9),
 		TimeDecayHalfLifeHours: config.GetFloat("TIME_DECAY_HALF_LIFE_HOURS", 12.0),
 		RefineIntraThreshold:   config.GetFloat("REFINE_INTRA_THRESHOLD", 0.93),
 		RefineInterThreshold:   config.GetFloat("REFINE_INTER_THRESHOLD", 0.92),

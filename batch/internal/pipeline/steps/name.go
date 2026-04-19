@@ -124,19 +124,6 @@ func nameChunk(ctx context.Context, chatClient *llm.ChatClient, clusters []Clust
 		)
 	}
 
-	const system = `各グループの「全記事」が共通して報じている出来事を、20字以内の自然な日本語で命名してください。
-
-命名スタイル:
-- 体言止め（名詞句）を基本とする。例:「日銀の利上げ決定」「トランプ関税と円安」
-- 述語（〜した・〜される）で終わらせない
-- 固有名詞（人名・地名・組織名）は積極的に使う
-
-制約:
-- グループ内の一部の記事にしか当てはまらない内容は含めない
-
-必ずJSON形式のみで回答してください。
-出力フォーマット: { "groups": [{ "index": 0, "title": "タイトル" }, ...] }`
-
 	prompt := clusterList.String()
 	// Log chunk summary: which clusters, sizes, prompt length
 	clusterSummary := make([]string, len(clusters))
@@ -159,7 +146,7 @@ func nameChunk(ctx context.Context, chatClient *llm.ChatClient, clusters []Clust
 		"items", strings.Join(clusterSummary, " "),
 	)
 
-	content, err := chatClient.Complete(ctx, system, prompt, 4096)
+	content, err := chatClient.Complete(ctx, nameSystemPrompt, prompt, 4096)
 	elapsed := time.Since(t0)
 	if err != nil {
 		slog.Warn("name clusters LLM error, using fallback",
