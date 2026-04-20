@@ -85,6 +85,15 @@ export default function InspectPage() {
   // groupId → 開いている記事インデックス（nearest neighbors 展開用）
   const [expandedArticle, setExpandedArticle] = useState<Map<string, number | null>>(new Map());
 
+  // regroup state: articleUrl → suggestion or loading
+  const [regroupLoading, setRegroupLoading] = useState<Set<string>>(new Set());
+  const [regroupSuggestion, setRegroupSuggestion] = useState<Map<string, {
+    targetGroupId: string | null;
+    targetGroupTitle: string;
+    reason: string;
+  } | null>>(new Map());
+  const [regroupApplying, setRegroupApplying] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     setFeedLoading(true);
     setSnapLoading(true);
@@ -169,6 +178,66 @@ export default function InspectPage() {
       next.set(groupId, prev.get(groupId) === idx ? null : idx);
       return next;
     });
+  }
+
+  function triggerRegroup(snapshotId: string, groupId: string, articleUrl: string) {
+    setRegroupLoading((prev) => new Set(prev).add(articleUrl));
+    fetch(`${API_BASE}/api/batch/inspect/regroup/suggest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ snapshotId, groupId, articleUrl }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.error) throw new Error(d.error);
+        setRegroupSuggestion((prev) => new Map(prev).set(articleUrl, {
+          targetGroupId: d.targetGroupId,
+          targetGroupTitle: d.targetGroupTitle ?? "",
+          reason: d.reason ?? "",
+        }));
+      })
+      .catch(() => {
+        setRegroupSuggestion((prev) => new Map(prev).set(articleUrl, null));
+      })
+      .finally(() => {
+        setRegroupLoading((prev) => {
+          const next = new Set(prev);
+          next.delete(articleUrl);
+          return next;
+        });
+      });
+  }
+
+  function applyRegroup(snapshotId: string, groupId: string, articleUrl: string, targetGroupId: string | null) {
+    setRegroupApplying((prev) => new Set(prev).add(articleUrl));
+    fetch(`${API_BASE}/api/batch/inspect/regroup/apply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ snapshotId, groupId, articleUrl, targetGroupId }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.error) throw new Error(d.error);
+        // リロードして反映
+        fetch(`${API_BASE}/api/batch/latest`)
+          .then((r) => r.json())
+          .then((d) => {
+            setSnapshot(d.snapshot ?? null);
+            setSnapshotGroups(d.groups ?? []);
+            // キャッシュクリア
+            setInspectCache(new Map());
+            setRecomputeCache(new Map());
+            setRegroupSuggestion(new Map());
+          });
+      })
+      .catch((e) => alert("移動に失敗: " + e.message))
+      .finally(() => {
+        setRegroupApplying((prev) => {
+          const next = new Set(prev);
+          next.delete(articleUrl);
+          return next;
+        });
+      });
   }
 
   const multiOutletFeed  = feedGroups.filter((g) => !g.singleOutlet).length;
@@ -463,7 +532,57 @@ export default function InspectPage() {
                                         <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
                                           {item.publishedAt ? formatRelative(item.publishedAt) : "—"}
                                         </span>
+                                        {/* 除外ボタン（recompute実行済みの場合のみ表示） */}
+                                        {recompute && snapshot && g.id && (
+                                          regroupLoading.has(item.url) ? (
+                                            <span className="text-[10px] text-gray-400 shrink-0">判定中…</span>
+                                          ) : !regroupSuggestion.has(item.url) ? (
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); triggerRegroup(snapshot.id, g.id!, item.url); }}
+                                              className="text-[10px] text-red-400 hover:text-red-600 shrink-0 px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors"
+                                              title="この記事をグループから除外"
+                                            >
+                                              除外
+                                            </button>
+                                          ) : null
+                                        )}
                                       </div>
+                                      {/* regroup suggestion */}
+                                      {regroupSuggestion.has(item.url) && (() => {
+                                        const sug = regroupSuggestion.get(item.url);
+                                        const applying = regroupApplying.has(item.url);
+                                        if (!sug) return (
+                                          <div className="mt-1 ml-26 text-[11px] text-red-500">LLM判定に失敗しました</div>
+                                        );
+                                        return (
+                                          <div className="mt-1.5 ml-26 pl-2 border-l-2 border-orange-200 space-y-1 text-[11px]">
+                                            <div className="text-gray-600">
+                                              <span className="font-semibold text-orange-600">LLM判定: </span>
+                                              {sug.targetGroupId
+                                                ? <span>「<span className="font-semibold">{sug.targetGroupTitle}</span>」に移動を推奨</span>
+                                                : <span className="text-gray-500">適切な移動先なし → 単独グループ化</span>
+                                              }
+                                            </div>
+                                            <div className="text-gray-400">{sug.reason}</div>
+                                            <div className="flex gap-2 pt-0.5">
+                                              <button
+                                                disabled={applying}
+                                                onClick={() => snapshot && g.id && applyRegroup(snapshot.id, g.id, item.url, sug.targetGroupId)}
+                                                className="text-[10px] font-semibold text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 px-2 py-1 rounded transition-colors"
+                                              >
+                                                {applying ? "処理中…" : sug.targetGroupId ? "移動を実行" : "単独グループ化"}
+                                              </button>
+                                              <button
+                                                disabled={applying}
+                                                onClick={() => setRegroupSuggestion((prev) => { const next = new Map(prev); next.delete(item.url); return next; })}
+                                                className="text-[10px] text-gray-400 hover:text-gray-600 px-2 py-1 rounded transition-colors"
+                                              >
+                                                キャンセル
+                                              </button>
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
                                       {/* 記事詳細（nearest neighbors / alternative clusters） */}
                                       {rcArticle && artExpanded && (
                                         <div className="mt-1.5 ml-26 pl-2 border-l-2 border-gray-100 space-y-2 text-[11px]">

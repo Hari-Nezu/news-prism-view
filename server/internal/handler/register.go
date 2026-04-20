@@ -9,6 +9,8 @@ func Register(mux *http.ServeMux, d *Deps) {
 	mux.HandleFunc("POST /api/batch/run", d.BatchRun)
 	mux.HandleFunc("GET /api/batch/inspect", d.BatchInspect)
 	mux.HandleFunc("POST /api/batch/inspect/recompute", d.BatchInspectRecompute)
+	mux.HandleFunc("POST /api/batch/inspect/regroup/suggest", d.BatchRegroupSuggest)
+	mux.HandleFunc("POST /api/batch/inspect/regroup/apply", d.BatchRegroupApply)
 
 	// Config
 	mux.HandleFunc("GET /api/config", d.Config_)

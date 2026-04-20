@@ -33,7 +33,13 @@ type consensusLLMOutput struct {
 	Groups []consensusGroupOutput `json:"groups"`
 }
 
-const consensusChunkSize = 5
+const consensusChunkSize = 3
+
+// consensusMaxArticlesPerCluster は1クラスタあたりLLMに送る記事の最大数。
+const consensusMaxArticlesPerCluster = 8
+
+// consensusSummaryMaxRunes はサマリーの最大文字数。
+const consensusSummaryMaxRunes = 100
 
 // ComputeConsensus は各クラスタについて、事実ごとにどのメディアが報じているかを LLM で抽出する。
 // 1記事または単一媒体のクラスタはスキップ（空スライスを返す）。
@@ -89,10 +95,16 @@ func consensusChunk(ctx context.Context, chatClient *llm.ChatClient, clusters []
 	var sb strings.Builder
 	for i, c := range clusters {
 		fmt.Fprintf(&sb, "グループ%d\n", offset+i)
-		for _, a := range c.Articles {
+		articles := c.Articles
+		if len(articles) > consensusMaxArticlesPerCluster {
+			articles = articles[:consensusMaxArticlesPerCluster]
+		}
+		for _, a := range articles {
 			summary := a.Summary
 			if summary == "" {
 				summary = "（要約なし）"
+			} else if runes := []rune(summary); len(runes) > consensusSummaryMaxRunes {
+				summary = string(runes[:consensusSummaryMaxRunes])
 			}
 			fmt.Fprintf(&sb, "  [%s] %s\n    要約: %s\n", a.Source, a.Title, summary)
 		}

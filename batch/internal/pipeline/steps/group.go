@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"log/slog"
 	"math"
 
 	"github.com/newsprism/shared/db"
@@ -10,9 +11,10 @@ const categoryOther = "other"
 
 // Cluster represents a group of articles with a centroid embedding.
 type Cluster struct {
-	Centroid []float32
-	Articles []db.Article
-	DomCate  string
+	Centroid      []float32
+	Articles      []db.Article
+	DomCate       string
+	AvgSimilarity float64 // クラスタ内の平均コサイン類似度（centroid対各記事）
 }
 
 // GroupArticles performs greedy cosine similarity clustering.
@@ -43,10 +45,21 @@ func GroupArticles(articles []db.Article, threshold float64) []Cluster {
 		}
 
 		if bestIdx >= 0 {
+			slog.Debug("group: article merged",
+				"title", a.Title,
+				"cluster_idx", bestIdx,
+				"cluster_title", clusters[bestIdx].Articles[0].Title,
+				"similarity", bestSim,
+				"cluster_size", len(clusters[bestIdx].Articles)+1,
+			)
 			clusters[bestIdx].Articles = append(clusters[bestIdx].Articles, a)
 			clusters[bestIdx].Centroid = meanVector(articleVectors(clusters[bestIdx].Articles))
 			clusters[bestIdx].DomCate = dominantCate(clusters[bestIdx].Articles)
 		} else {
+			slog.Debug("group: new cluster",
+				"title", a.Title,
+				"cluster_idx", len(clusters),
+			)
 			clusters = append(clusters, Cluster{
 				Centroid: a.Embedding,
 				Articles: []db.Article{a},
@@ -54,7 +67,49 @@ func GroupArticles(articles []db.Article, threshold float64) []Cluster {
 			})
 		}
 	}
+
+	// クラスタ内平均類似度を計算
+	for i := range clusters {
+		clusters[i].AvgSimilarity = clusterAvgSimilarity(clusters[i])
+	}
+
+	// サマリー: 2記事以上のクラスタの中身を出力
+	for i, c := range clusters {
+		if len(c.Articles) < 2 {
+			continue
+		}
+		titles := make([]string, len(c.Articles))
+		for j, a := range c.Articles {
+			titles[j] = a.Title
+		}
+		slog.Debug("group: cluster summary",
+			"cluster_idx", i,
+			"size", len(c.Articles),
+			"titles", titles,
+		)
+	}
+
 	return clusters
+}
+
+// clusterAvgSimilarity はクラスタ内の各記事とセントロイドの平均コサイン類似度を返す。
+func clusterAvgSimilarity(c Cluster) float64 {
+	if len(c.Centroid) == 0 || len(c.Articles) <= 1 {
+		return 0
+	}
+	var sum float64
+	var n int
+	for _, a := range c.Articles {
+		if len(a.Embedding) == 0 {
+			continue
+		}
+		sum += float64(cosineSimilarity(a.Embedding, c.Centroid))
+		n++
+	}
+	if n == 0 {
+		return 0
+	}
+	return sum / float64(n)
 }
 
 func cosineSimilarity(a, b []float32) float32 {

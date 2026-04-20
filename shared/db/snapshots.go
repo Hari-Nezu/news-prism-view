@@ -507,3 +507,122 @@ func RecomputeGroupInspect(ctx context.Context, pool *pgxpool.Pool, snapshotID, 
 	result.ThresholdSimulation = sim
 	return result, nil
 }
+
+// RegroupCandidate はLLMが選定した移動先候補。
+type RegroupCandidate struct {
+	GroupID    string `json:"groupId"`
+	GroupTitle string `json:"groupTitle"`
+}
+
+// GetCandidateGroupsForRegroup は同一スナップショット内のグループ一覧を返す（除外元を除く）。
+func GetCandidateGroupsForRegroup(ctx context.Context, pool *pgxpool.Pool, snapshotID, excludeGroupID string) ([]RegroupCandidate, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT id, group_title
+		FROM snapshot_groups
+		WHERE snapshot_id = $1 AND id != $2
+		ORDER BY rank ASC`,
+		snapshotID, excludeGroupID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var candidates []RegroupCandidate
+	for rows.Next() {
+		var c RegroupCandidate
+		if err := rows.Scan(&c.GroupID, &c.GroupTitle); err != nil {
+			return nil, err
+		}
+		candidates = append(candidates, c)
+	}
+	return candidates, rows.Err()
+}
+
+// MoveArticleToGroup は記事を別のグループに移動する。
+// 元グループが空になった場合はグループごと削除する。
+func MoveArticleToGroup(ctx context.Context, pool *pgxpool.Pool, articleURL, fromGroupID, toGroupID string) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// 記事を移動
+	tag, err := tx.Exec(ctx, `
+		UPDATE snapshot_group_items SET group_id = $1
+		WHERE url = $2 AND group_id = $3`,
+		toGroupID, articleURL, fromGroupID,
+	)
+	if err != nil {
+		return fmt.Errorf("move article: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("article not found in group")
+	}
+
+	// 元グループが空か確認
+	var remaining int
+	err = tx.QueryRow(ctx, `SELECT COUNT(*) FROM snapshot_group_items WHERE group_id = $1`, fromGroupID).Scan(&remaining)
+	if err != nil {
+		return err
+	}
+	if remaining == 0 {
+		if _, err := tx.Exec(ctx, `DELETE FROM snapshot_groups WHERE id = $1`, fromGroupID); err != nil {
+			return fmt.Errorf("delete empty group: %w", err)
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
+// CreateSoloGroupAndMoveArticle は記事を単独グループとして切り出す。
+func CreateSoloGroupAndMoveArticle(ctx context.Context, pool *pgxpool.Pool, articleURL, fromGroupID, snapshotID, title string) (string, error) {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+
+	// 新グループ作成（rankは末尾）
+	var maxRank int
+	tx.QueryRow(ctx, `SELECT COALESCE(MAX(rank), 0) FROM snapshot_groups WHERE snapshot_id = $1`, snapshotID).Scan(&maxRank)
+
+	var newGroupID string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO snapshot_groups (snapshot_id, group_title, rank, single_outlet, covered_by, silent_media)
+		VALUES ($1, $2, $3, true, '[]', '[]')
+		RETURNING id`,
+		snapshotID, title, maxRank+1,
+	).Scan(&newGroupID)
+	if err != nil {
+		return "", fmt.Errorf("create solo group: %w", err)
+	}
+
+	// 記事を移動
+	tag, err := tx.Exec(ctx, `
+		UPDATE snapshot_group_items SET group_id = $1
+		WHERE url = $2 AND group_id = $3`,
+		newGroupID, articleURL, fromGroupID,
+	)
+	if err != nil {
+		return "", fmt.Errorf("move article: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return "", fmt.Errorf("article not found in group")
+	}
+
+	// 元グループが空か確認
+	var remaining int
+	err = tx.QueryRow(ctx, `SELECT COUNT(*) FROM snapshot_group_items WHERE group_id = $1`, fromGroupID).Scan(&remaining)
+	if err != nil {
+		return "", err
+	}
+	if remaining == 0 {
+		if _, err := tx.Exec(ctx, `DELETE FROM snapshot_groups WHERE id = $1`, fromGroupID); err != nil {
+			return "", fmt.Errorf("delete empty group: %w", err)
+		}
+	}
+
+	return newGroupID, tx.Commit(ctx)
+}

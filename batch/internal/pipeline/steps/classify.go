@@ -133,7 +133,7 @@ func classifyBatchLLM(ctx context.Context, chatClient *llm.ChatClient, articles 
 	}
 
 	var batch llmBatchResult
-	if jsonErr := json.Unmarshal([]byte(raw), &batch); jsonErr != nil {
+	if jsonErr := json.Unmarshal([]byte(extractJSON(raw)), &batch); jsonErr != nil {
 		slog.Warn(
 			"classify LLM batch parse failed",
 			"err", jsonErr, "raw", raw[:min(len(raw), 200)])

@@ -139,12 +139,6 @@ func nameChunk(ctx context.Context, chatClient *llm.ChatClient, clusters []Clust
 		clusterSummary[i] = fmt.Sprintf("[%d:%d記事 %q]", offset+i, len(c.Articles), first)
 	}
 	t0 := time.Now()
-	slog.Debug("name chunk start",
-		"chunk_offset", offset,
-		"clusters", len(clusters),
-		"prompt_bytes", len(prompt),
-		"items", strings.Join(clusterSummary, " "),
-	)
 
 	content, err := chatClient.Complete(ctx, nameSystemPrompt, prompt, 4096)
 	elapsed := time.Since(t0)
