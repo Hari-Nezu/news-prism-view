@@ -28,8 +28,8 @@ func LoadShared() SharedConfig {
 		ClassifyModel:          GetEnv("CLASSIFY_MODEL", "gemma-4-E2B-it-Q8_0"),
 		RefineModel:            GetEnv("REFINE_MODEL", "gemma-4-E2B-it-Q8_0"),
 		EmbedModel:             GetEnv("EMBED_MODEL", "Targoyle/ruri-v3-310m-GGUF:Q8_0"),
-		GroupClusterThreshold:  GetFloat("GROUP_CLUSTER_THRESHOLD", 0.72),
-		EmbedClassifyThreshold: GetFloat("EMBED_CLASSIFY_THRESHOLD", 0.5),
+		GroupClusterThreshold:  GetFloat("GROUP_CLUSTER_THRESHOLD", 0.91),
+		EmbedClassifyThreshold: GetFloat("EMBED_CLASSIFY_THRESHOLD", 0.8),
 	}
 }
 

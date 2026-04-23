@@ -46,3 +46,6 @@ src/generated/
 
 # go
 .gocache/
+batch/logs/
+
+scripts/.venv

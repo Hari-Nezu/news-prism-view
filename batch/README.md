@@ -1,6 +1,6 @@
 # newsprism-batch
 
-RSS収集 → embedding → 分類 → クラスタリング → 品質審査 → 命名 → スナップショット保存、の7ステージバッチパイプライン。
+RSS収集 → embedding → 分類 → クラスタリング → 品質審査 → 命名 → コンセンサス → スナップショット保存、の8ステージバッチパイプライン。
 
 設計経緯: [`docs/batch-pipeline-design.md`](../docs/batch-pipeline-design.md)
 
@@ -38,7 +38,7 @@ go run ./cmd/newsprism-batch serve
 | `CLASSIFY_MODEL` | `gemma-4-E4B-it-Q8_0` | 分類フォールバック用チャットモデル |
 | `REFINE_MODEL` | `LLM_MODEL と同じ` | refine用チャットモデル（別モデルを使う場合のみ設定） |
 | `EMBED_MODEL` | `Targoyle/ruri-v3-310m-GGUF:Q8_0` | 埋め込みモデル（310次元） |
-| `GROUP_CLUSTER_THRESHOLD` | `0.72` | クラスタリングのコサイン類似度閾値 |
+| `GROUP_CLUSTER_THRESHOLD` | `0.72` | クラスタリングのコサイン類似度閾値（greedy / BERTopicフォールバック兼用） |
 | `EMBED_CLASSIFY_THRESHOLD` | `0.5` | embedding分類の信頼度閾値（これ未満はLLMフォールバック） |
 | `REFINE_INTRA_THRESHOLD` | `0.93` | クラスタ内min類似度がこれ以上なら coherent とみなしLLM審査をスキップ |
 | `REFINE_INTER_THRESHOLD` | `0.92` | クラスタ間centroid類似度がこれ以上ならmerge候補としてLLM審査対象に |
@@ -48,16 +48,45 @@ go run ./cmd/newsprism-batch serve
 | `FEEDS_YAML_PATH` | `feeds.yaml` | フィード定義ファイルパス |
 | `DEBUG` | _(未設定)_ | 設定するとログレベルが DEBUG に |
 
----
+### BERTopicクラスタリング（オプション）
 
-## パイプライン（7ステージ）
+| 変数 | デフォルト | 説明 |
+|------|-----------|------|
+| `USE_BERTOPIC` | `false` | `true` にするとBERTopic（UMAP+HDBSCAN）でクラスタリング |
+| `BERTOPIC_PYTHON_PATH` | `python3` | Python実行ファイルのパス |
+| `BERTOPIC_SCRIPT_PATH` | `../scripts/bertopic_cluster.py` | クラスタリングスクリプトのパス（バイナリのCWD基準） |
+| `BERTOPIC_MIN_CLUSTER_SIZE` | `3` | HDBSCANの最小クラスタサイズ |
+| `BERTOPIC_UMAP_COMPONENTS` | `5` | UMAPの次元数 |
+| `BERTOPIC_TIMEOUT_SEC` | `120` | Pythonサブプロセスのタイムアウト（秒） |
+
+BERTopic使用時のセットアップ:
+
+```bash
+cd scripts
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+`.env.local` に追加:
 
 ```
-collect → embed → classify → group → refine → name → store
-   ↓                                                    ↓
-RssArticle                                    ProcessedSnapshot
-(embedding保存)                                ├─ SnapshotGroup
-                                               └─ SnapshotGroupItem
+USE_BERTOPIC=true
+BERTOPIC_PYTHON_PATH=/絶対パス/scripts/.venv/bin/python3
+```
+
+Python起動に失敗した場合はgreedyクラスタリング（`GROUP_CLUSTER_THRESHOLD`）にフォールバックする。
+
+---
+
+## パイプライン（8ステージ）
+
+```
+collect → embed → classify → group → refine → name → consensus → store
+   ↓                                                               ↓
+RssArticle                                             ProcessedSnapshot
+(embedding保存)                                         ├─ SnapshotGroup
+                                                        └─ SnapshotGroupItem
 ```
 
 ### 1. collect
@@ -86,11 +115,17 @@ RssArticle                                    ProcessedSnapshot
 
 ### 4. group
 
-- 直近3日以内のembedding済み記事を取得
-- **グリーディコサイン類似度クラスタリング**（閾値: `GROUP_CLUSTER_THRESHOLD`）
-- **同一カテゴリのクラスタにしか参加できない**（hard gate）
-- unknown カテゴリ（`""` または `"other"`）は例外レーン扱いで、unknown同士のみ結合可（閾値 +0.05）
+直近3日以内のembedding済み記事を取得してクラスタリング。`USE_BERTOPIC` で切り替える。
+
+**デフォルト（greedy）**:
+- コサイン類似度の貪欲法（閾値: `GROUP_CLUSTER_THRESHOLD`）
 - embeddingなし記事は単独クラスタ扱い
+
+**BERTopic（`USE_BERTOPIC=true`）**:
+- Pythonサブプロセス（`scripts/bertopic_cluster.py`）を `exec.CommandContext` で起動
+- UMAP（768次元→`BERTOPIC_UMAP_COMPONENTS`次元）→ HDBSCAN（密度ベース）
+- ノイズ判定（HDBSCAN label=-1）された記事は単独クラスタ扱い
+- Python失敗時はgreedyにフォールバック
 
 ### 5. refine
 
@@ -105,7 +140,7 @@ RssArticle                                    ProcessedSnapshot
   - `move`: 特定記事を別クラスタへ移動
 - `SKIP_REFINE=true` で完全スキップ可能
 
-* 注意 LLMを利用してクラスタリングを改善する仕組みだが、うまく機能をしない上速度劣化が著しい
+> 注意: LLMによる改善を試みるが、現状では効果が限定的で速度劣化が大きい
 
 ### 6. name
 
@@ -113,7 +148,12 @@ RssArticle                                    ProcessedSnapshot
 - JSON形式で返却させる（`response_format: json_object`、temperature: 0.1）
 - LLM失敗時: 記事タイトルのn-gram（2〜6文字、50%以上出現）をフォールバック
 
-### 7. store
+### 7. consensus
+
+- クラスタ内の記事を複数媒体の報道として分析し、各報道ポイントを抽出
+- 各ポイントについてどのメディアが報じているかを列挙（報じているメディア数の多い順）
+
+### 8. store
 
 - クラスタをランク付け（複数媒体掲載 → 媒体数 → 記事数の順）
 - 媒体カバレッジ追跡: `coveredBy`（掲載媒体）、`silentMedia`（未掲載媒体）

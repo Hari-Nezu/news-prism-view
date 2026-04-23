@@ -2,7 +2,11 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/newsprism/batch/internal/config"
@@ -79,7 +83,13 @@ func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.F
 	if err != nil {
 		return partialResult(start, "get articles failed: "+err.Error())
 	}
-	clusters := steps.GroupArticles(articles, cfg.GroupClusterThreshold)
+	var clusters []steps.Cluster
+	if cfg.UseBERTopic {
+		slog.Info("pipeline: group using BERTopic")
+		clusters = steps.GroupArticlesBERTopic(ctx, articles, cfg.BERTopicConfig)
+	} else {
+		clusters = steps.GroupArticles(articles, cfg.GroupClusterThreshold)
+	}
 	slog.Info("pipeline: group done", "clusters", len(clusters), "articles", len(articles))
 
 	// 5. refine
@@ -98,6 +108,9 @@ func Run(ctx context.Context, pool *db.Pool, cfg config.Config, feeds []config.F
 	// 7. consensus
 	slog.Info("pipeline: consensus start")
 	consensus := steps.ComputeConsensus(ctx, chatClient, clusters)
+
+	// dump log (group + consensus + similarity)
+	dumpGroupLog(clusters, consensus)
 
 	// 8. store
 	slog.Info("pipeline: store start")
@@ -167,6 +180,57 @@ func Rename(ctx context.Context, pool *db.Pool, cfg config.Config) Result {
 		DurationMs: int(time.Since(start).Milliseconds()),
 		Status:     "success",
 	}
+}
+
+// dumpGroupLog はグルーピング結果を logs/group_YYYYMMDD_HHMMSS.json に書き出す。
+func dumpGroupLog(clusters []steps.Cluster, consensus []steps.ConsensusResult) {
+	type articleEntry struct {
+		Title    string `json:"title"`
+		Source   string `json:"source"`
+		Category string `json:"category"`
+		URL      string `json:"url"`
+	}
+	type clusterEntry struct {
+		Index         int                   `json:"index"`
+		Size          int                   `json:"size"`
+		DomCate       string                `json:"dominant_category"`
+		AvgSimilarity float64               `json:"avg_similarity"`
+		Articles      []articleEntry        `json:"articles"`
+		Consensus     []steps.CoveragePoint `json:"consensus,omitempty"`
+	}
+
+	entries := make([]clusterEntry, len(clusters))
+	for i, c := range clusters {
+		arts := make([]articleEntry, len(c.Articles))
+		for j, a := range c.Articles {
+			arts[j] = articleEntry{Title: a.Title, Source: a.Source, Category: a.Category, URL: a.URL}
+		}
+		var points []steps.CoveragePoint
+		if i < len(consensus) && len(consensus[i].Points) > 0 {
+			points = consensus[i].Points
+		}
+		entries[i] = clusterEntry{
+			Index:         i,
+			Size:          len(c.Articles),
+			DomCate:       c.DomCate,
+			AvgSimilarity: c.AvgSimilarity,
+			Articles:      arts,
+			Consensus:     points,
+		}
+	}
+
+	dir := "logs"
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		slog.Warn("dumpGroupLog: mkdir failed", "err", err)
+		return
+	}
+	filename := filepath.Join(dir, fmt.Sprintf("group_%s.json", time.Now().Format("20060102_150405")))
+	data, _ := json.MarshalIndent(entries, "", "  ")
+	if err := os.WriteFile(filename, data, 0o644); err != nil {
+		slog.Warn("dumpGroupLog: write failed", "err", err)
+		return
+	}
+	slog.Info("pipeline: group log written", "path", filename)
 }
 
 func partialResult(start time.Time, errMsg string) Result {
