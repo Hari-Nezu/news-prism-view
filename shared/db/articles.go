@@ -138,7 +138,7 @@ func GetRecentEmbeddedArticles(ctx context.Context, pool *pgxpool.Pool) ([]Artic
 	rows, err := pool.Query(ctx, `
 		SELECT url, title, source, summary, published_at, COALESCE(category,''), COALESCE(subcategory,''), embedding::text
 		FROM rss_articles
-		WHERE embedded_at IS NOT NULL
+		WHERE embedding IS NOT NULL
 		  AND published_at >= NOW() - INTERVAL '3 days'
 		ORDER BY published_at DESC NULLS LAST`,
 	)

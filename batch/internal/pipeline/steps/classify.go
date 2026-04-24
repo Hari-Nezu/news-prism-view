@@ -39,8 +39,8 @@ func loadRefEmbeddings(ctx context.Context, embedClient *llm.EmbedClient) ([]sub
 		for i, s := range subs {
 			texts[i] = s.Text
 		}
-		// サブカテゴリ説明はドキュメント側（"文章: " プレフィックス）
-		vecs, err := embedClient.EmbedBatchWithPrefix(ctx, texts, "文章: ")
+		// サブカテゴリ説明を embedding 化（e5-instruct: query prefix）
+		vecs, err := embedClient.EmbedBatchWithPrefix(ctx, texts, "query: ")
 		if err != nil {
 			refErr = fmt.Errorf("reference embedding failed: %w", err)
 			return
@@ -279,8 +279,8 @@ func Classify(ctx context.Context, pool *db.Pool, embedClient *llm.EmbedClient, 
 			}
 			texts[i] = text
 		}
-		// 記事はクエリ側（"クエリ: " プレフィックス）
-		vecs, embedErr := embedClient.EmbedBatchWithPrefix(ctx, texts, "クエリ: ")
+		// 記事を embedding 化（e5-instruct: query prefix）
+		vecs, embedErr := embedClient.EmbedBatchWithPrefix(ctx, texts, "query: ")
 		if embedErr != nil {
 			slog.Warn("classify: article embedding failed, falling back to keywords", "err", embedErr)
 			vecs = nil

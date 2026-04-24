@@ -29,7 +29,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## pgvector
 
-- `Unsupported("vector(768)")` カラムは Prisma CRUD では操作不可 → 生SQL必須
+- `Unsupported("vector(1024)")` カラムは Prisma CRUD では操作不可 → 生SQL必須
 - `embedding IS NOT NULL` フィルタを忘れずに
 - INSERT: `$1::vector`、検索: `embedding <=> $1::vector`（コサイン距離）
 
