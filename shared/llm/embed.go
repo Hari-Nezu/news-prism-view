@@ -28,7 +28,7 @@ const embedChunkSize = 32
 
 // Embed vectorizes a single text string using query prefix.
 func (c *EmbedClient) Embed(ctx context.Context, text string) ([]float32, error) {
-	vecs, err := c.EmbedBatchWithPrefix(ctx, []string{text}, "クエリ: ")
+	vecs, err := c.EmbedBatchWithPrefix(ctx, []string{text}, "query: ")
 	if err != nil || len(vecs) == 0 {
 		return nil, err
 	}
@@ -36,14 +36,14 @@ func (c *EmbedClient) Embed(ctx context.Context, text string) ([]float32, error)
 }
 
 // EmbedBatch vectorizes texts in chunks of embedChunkSize per HTTP request.
-// Uses the document prefix ("文章: ") for article/document embeddings.
+// Uses the clustering instruction prefix for article/document embeddings.
 // Returns nil slice elements for failed items.
 func (c *EmbedClient) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
-	return c.EmbedBatchWithPrefix(ctx, texts, "文章: ")
+	return c.EmbedBatchWithPrefix(ctx, texts, "Instruct: ニュース記事を具体的な出来事・事件単位でクラスタリングする\nQuery: ")
 }
 
 // EmbedBatchWithPrefix vectorizes texts using the specified prefix.
-// Use "文章: " for documents and "クエリ: " for queries (ruri-v3 asymmetric model).
+// e5-instruct format: "query: " for queries, "Instruct: ...\nQuery: " for task-specific.
 func (c *EmbedClient) EmbedBatchWithPrefix(ctx context.Context, texts []string, prefix string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, nil

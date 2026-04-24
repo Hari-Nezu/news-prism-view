@@ -42,7 +42,7 @@ func Load() Config {
 		BERTopicConfig: BERTopicConfig{
 			PythonPath:        config.GetEnv("BERTOPIC_PYTHON_PATH", "python3"),
 			ScriptPath:        config.GetEnv("BERTOPIC_SCRIPT_PATH", "../scripts/bertopic_cluster.py"),
-			MinClusterSize:    int(config.GetFloat("BERTOPIC_MIN_CLUSTER_SIZE", 4)),
+			MinClusterSize:    int(config.GetFloat("BERTOPIC_MIN_CLUSTER_SIZE", 2)),
 			UMAPComponents:    int(config.GetFloat("BERTOPIC_UMAP_COMPONENTS", 15)),
 			TimeoutSec:        int(config.GetFloat("BERTOPIC_TIMEOUT_SEC", 120)),
 			FallbackThreshold: groupThreshold,

@@ -21,7 +21,7 @@ services:
       - EMBED_BASE_URL=${LLM_BASE_URL:-http://ollama:11434}
       - LLM_MODEL=${LLM_MODEL:-ggml-org/gemma3:4b}
       - CLASSIFY_MODEL=${CLASSIFY_MODEL:-ggml-org/gemma3:4b}
-      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
+      - EMBED_MODEL=${EMBED_MODEL:-multilingual-e5-large-instruct-q8_0}
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -42,7 +42,7 @@ services:
       - EMBED_BASE_URL=${LLM_BASE_URL:-http://ollama:11434}
       - LLM_MODEL=${LLM_MODEL:-ggml-org/gemma3:4b}
       - CLASSIFY_MODEL=${CLASSIFY_MODEL:-ggml-org/gemma3:4b}
-      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
+      - EMBED_MODEL=${EMBED_MODEL:-multilingual-e5-large-instruct-q8_0}
       - API_PORT=8091
       - BATCH_SERVER_URL=http://batch:8090
     depends_on:
@@ -97,9 +97,9 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
-      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
+      - EMBED_MODEL=${EMBED_MODEL:-multilingual-e5-large-instruct-q8_0}
     entrypoint: >
-      sh -c "ollama pull $${OLLAMA_MODEL:-llama3.2} && ollama pull $${EMBED_MODEL:-ruri-v3-310m}"
+      sh -c "ollama pull $${OLLAMA_MODEL:-llama3.2} && ollama pull $${EMBED_MODEL:-multilingual-e5-large-instruct-q8_0}"
     restart: "no"
 
   db:

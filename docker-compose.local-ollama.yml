@@ -30,7 +30,7 @@ services:
       - EMBED_BASE_URL=${LLM_BASE_URL:-http://host-gateway:8080}
       - LLM_MODEL=${LLM_MODEL:-ggml-org/gemma3:4b}
       - CLASSIFY_MODEL=${CLASSIFY_MODEL:-ggml-org/gemma3:4b}
-      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
+      - EMBED_MODEL=${EMBED_MODEL:-multilingual-e5-large-instruct-q8_0}
     extra_hosts:
       - "host-gateway:host-gateway"
     depends_on:
@@ -51,7 +51,7 @@ services:
       - EMBED_BASE_URL=${LLM_BASE_URL:-http://host-gateway:8080}
       - LLM_MODEL=${LLM_MODEL:-ggml-org/gemma3:4b}
       - CLASSIFY_MODEL=${CLASSIFY_MODEL:-ggml-org/gemma3:4b}
-      - EMBED_MODEL=${EMBED_MODEL:-ruri-v3-310m}
+      - EMBED_MODEL=${EMBED_MODEL:-multilingual-e5-large-instruct-q8_0}
       - API_PORT=8091
       - BATCH_SERVER_URL=http://batch:8090
     extra_hosts:

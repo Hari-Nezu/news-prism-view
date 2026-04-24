@@ -63,7 +63,7 @@ func (c *ChatClient) CompleteJSON(ctx context.Context, system, user string) (str
 		},
 		"stream":          false,
 		"temperature":     0.1,
-		"max_tokens":      2048,
+		"max_tokens":      8192,
 		"response_format": map[string]string{"type": "json_object"},
 	})
 	if err != nil {

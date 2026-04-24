@@ -447,16 +447,10 @@ func RecomputeGroupInspect(ctx context.Context, pool *pgxpool.Pool, snapshotID, 
 		if hasEmb && len(centroid) > 0 {
 			raw := float64(CosineSimilarity(emb, centroid))
 			ar.SimilarityBeforePenalty = &raw
+			ar.SimilarityAfterPenalty = &raw
+			ar.SimilarityToCentroid = &raw
 
-			// Category gate: match grouper.groupGreedy behavior (skip if category differs)
-			penalized := raw
-			if detail.Category != nil && a.Category != nil && *a.Category != "" && *detail.Category != "" && *a.Category != *detail.Category {
-				penalized = 0
-			}
-			ar.SimilarityAfterPenalty = &penalized
-			ar.SimilarityToCentroid = &penalized
-
-			joins := penalized > threshold
+			joins := raw > threshold
 			ar.WouldJoinAtThreshold = &joins
 			if joins {
 				sim.WouldStay++
