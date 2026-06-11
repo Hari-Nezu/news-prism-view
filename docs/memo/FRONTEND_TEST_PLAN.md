@@ -1,3 +1,11 @@
+---
+status: partial
+scope: feature:frontend-test
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # フロントエンド テスト設計書
 
 > Sonnet 実装者向け。上から順に実装すること。
@@ -26,7 +34,7 @@
 |:--|:--|:--|:--|
 | `app/page.tsx` | `findDuplicateIndex` | `src/lib/find-duplicate.ts` | DONE |
 | `app/page.tsx` | `computeMultiModelAnalysis` | `src/lib/multi-model-analysis.ts` | DONE |
-| `app/inspect/page.tsx`, `app/ranking/page.tsx`, `components/CoverageMatrix.tsx`, `components/RssFeedPanel.tsx` | `formatRelative` / `formatDateTime` | `src/lib/format-time.ts` | DONE |
+| `src/app/(internal)/inspect/page.tsx`, `src/app/(public)/ranking/page.tsx`, `components/CoverageMatrix.tsx`, `components/RssFeedPanel.tsx` | `formatRelative` / `formatDateTime` | `src/lib/format-time.ts` | DONE |
 | `components/CoverageMatrix.tsx` | `sortGroups` | `src/lib/sort-groups.ts` | DONE |
 | `components/CoverageMatrix.tsx` | `countArticles` + `MEDIA` 定数 | `src/lib/media-matcher.ts` | DONE |
 | `components/RssFeedPanel.tsx` (loadFeeds 内) | URL dedup + 時系列ソート | `src/lib/dedup-feed-items.ts` | DONE |

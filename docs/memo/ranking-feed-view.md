@@ -1,3 +1,11 @@
+---
+status: current
+scope: feature:ranking
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 ## ランキング型グループ表示 — 【DONE】
 
 記事数（媒体数）に応じてカードサイズを変え、ニュースのボリューム感を一目で伝える。

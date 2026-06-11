@@ -1,3 +1,11 @@
+---
+status: current
+scope: feature:refine
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # Agentic Clustering Loop 設計
 
 ## 現状の問題

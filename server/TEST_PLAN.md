@@ -1,3 +1,11 @@
+---
+status: partial
+scope: feature:api-server-test
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # server/ テスト計画
 
 ## 概要

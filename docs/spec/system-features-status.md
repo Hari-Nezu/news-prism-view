@@ -1,10 +1,21 @@
+---
+status: current
+scope: system
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # 実装棚卸し（機能ステータス）
+
+> 全 API は Go server（`server/internal/handler/`、Port 8091）で提供する。フロントエンドは `API_BASE` 経由で呼ぶ。
 
 ## すでに実装済みの機能
 
-- Go バッチの `run` / `serve`、cron 実行、advisory lock、snapshot 保存
+- Go バッチの `run` / `serve` / `eval`、cron 実行、advisory lock、snapshot 保存
 - `processed_snapshots` / `snapshot_groups` / `snapshot_group_items`
-- `/api/batch/latest` / `/api/batch/history` / `/api/batch/run` / `/api/batch/inspect`
+- `GET /api/batch/latest` / `history` / `POST /run` / `GET /inspect`、`POST /inspect/recompute`、`POST /inspect/regroup/{suggest,apply}`
+- パイプラインに `refine`（LLM 品質審査）と `consensus`（報道ポイント抽出）ステージを追加（全8段）
 - `CoverageMatrix` の表示と記事一覧オーバーレイ、およびオーバーレイからの直接比較機能
 - `/compare` と `/api/compare/analyze` による SSE 比較
 - `/youtube` ページでの YouTube 動画字幕分析機能

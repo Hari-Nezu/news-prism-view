@@ -1,3 +1,11 @@
+---
+status: proposed
+scope: feature:llm-runtime
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # LLM推論のバッチ内インライン化
 
 ## 現状

@@ -1,3 +1,11 @@
+---
+status: partial
+scope: feature:summary
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # まとめ画面 拡張設計
 
 ## 未実装機能

@@ -1,4 +1,14 @@
+---
+status: partial
+scope: feature:inspect
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # グルーピング点検・修正 拡張設計 (Feedback, Override)
+
+> **現状（2026-06-11）**: 本書の `grouping_params` フィードバックループは**未実装**（下表のステップ1以降は未着手）。一方、本書執筆後に **regroup 機能**（`POST /api/batch/inspect/regroup/suggest`・`/apply`、`shared/db` の `GetCandidateGroupsForRegroup`）が別途実装された。これは「LLM に記事の移動先を判定させ、スナップショット上で記事を移動する」もので、本書が構想した override の一形態にあたる。両者の関係整理は今後の課題。
 
 今後の拡張として予定されている「表示の動的オーバーライド」および「人間によるフィードバックの次回バッチ影響（Next Batch Action）」の設計。
 
@@ -6,7 +16,7 @@
 
 ### 実装済み
 
-- `/inspect` ページ (`src/app/inspect/page.tsx`) — グループ一覧の閲覧
+- `/inspect` ページ (`src/app/(internal)/inspect/page.tsx`) — グループ一覧の閲覧
 - `GET /api/batch/inspect?groupId=` — グループ詳細取得
 - `POST /api/batch/inspect/recompute` — 診断・再計算（centroid類似度、nearest neighbors、alternative clusters、threshold simulation）
 - `RecomputeGroupInspect` (`shared/db/snapshots.go`) — neighbor検索は記事ごとに並列実行

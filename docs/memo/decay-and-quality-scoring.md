@@ -1,3 +1,11 @@
+---
+status: partial
+scope: feature:ranking
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # 減衰・品質スコアリング設計
 
 ## 現状の問題

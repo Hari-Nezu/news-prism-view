@@ -1,3 +1,11 @@
+---
+status: current
+scope: feature:clustering
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # クラスタリング精度改善プレイブック
 
 ## 前提: 現在のパイプライン構成

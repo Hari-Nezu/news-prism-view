@@ -1,4 +1,14 @@
+---
+status: partial
+scope: feature:youtube
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # YouTube ソース分析機能 — 【DONE】
+
+> **現状との差分（2026-06-11）**: 機能は実装済みだが、本書のファイル構成は Next.js 時代の設計。実際は **API は Go server**（`server/internal/handler/youtube.go`、`server/internal/youtube/`）に移行し、UI ページは `src/app/(internal)/youtube/page.tsx`。本文中の `src/app/api/youtube/...route.ts`・`ollama.ts`・`news-grouper.ts` 等は現状の配置と一致しない。また `YouTubeVideo.embedding` は `vector(768)` ではなく **`vector(1024)`**（migration 004）。
 
 既存のRSSパイプライン（取得→グループ化→3軸分析）を再利用し、
 YouTubeチャンネルの動画を **字幕（トランスクリプト）テキスト** ベースで政治ポジショニング分析する機能が実装済みです。
@@ -174,7 +184,7 @@ export function extractVideoId(url: string): string | null
 
 ## 8. UIページ設計
 
-`src/app/youtube/page.tsx` — 既存 `compare/page.tsx` のステートマシンパターンを踏襲:
+`src/app/(internal)/youtube/page.tsx` — 既存 `compare/page.tsx` のステートマシンパターンを踏襲:
 
 ```typescript
 type YouTubeStep =

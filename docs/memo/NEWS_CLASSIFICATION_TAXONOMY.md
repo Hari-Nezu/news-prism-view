@@ -1,4 +1,14 @@
+---
+status: deprecated
+scope: feature:classify
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # ニュース分類体系 — LLM活用による多階層分類設計
+
+> **廃止（2026-06-11）**: 本書は分類体系の初期提案（7→8カテゴリ移行案）。実装は **11カテゴリ** で完了しており、正典は [`docs/spec/news-categorization.md`](../spec/news-categorization.md)。本書のカテゴリ表・件数は現状と一致しないため、設計初期の経緯としてのみ残す。
 
 ## 概要
 

@@ -1,3 +1,11 @@
+---
+status: current
+scope: feature:consensus
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # 報道ポイント別カバレッジ表示
 
 ## 目的

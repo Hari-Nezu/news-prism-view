@@ -1,3 +1,12 @@
+---
+status: current
+scope: feature:classify
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+supersedes: docs/memo/NEWS_CLASSIFICATION_TAXONOMY.md
+---
+
 # ニュースのカテゴライズ仕様
 
 ## 概要
@@ -13,7 +22,7 @@
 
 ## 正式 taxonomy
 
-正式な分類定義は [shared/taxonomy/taxonomy.go](/Users/mk/Development/NewsPrismView/news-prism-view/shared/taxonomy/taxonomy.go) を正とする。  
+正式な分類定義は [shared/taxonomy/taxonomy.go](shared/taxonomy/taxonomy.go) を正とする。  
 Go と Next.js で同じ taxonomy を共有する前提で運用する。
 
 現在の大分類は次の 11 カテゴリ。
@@ -118,9 +127,9 @@ inspect UI ではこれを使って `cross_category_mismatch`、`subcategory_mis
 
 ## 関連ファイル
 
-- [shared/taxonomy/taxonomy.go](/Users/mk/Development/NewsPrismView/news-prism-view/shared/taxonomy/taxonomy.go)
-- [batch/internal/pipeline/steps/classify.go](/Users/mk/Development/NewsPrismView/news-prism-view/batch/internal/pipeline/steps/classify.go)
-- [batch/internal/pipeline/steps/group.go](/Users/mk/Development/NewsPrismView/news-prism-view/batch/internal/pipeline/steps/group.go)
-- [src/types/index.ts](/Users/mk/Development/NewsPrismView/news-prism-view/src/types/index.ts)
-- [src/lib/db.ts](/Users/mk/Development/NewsPrismView/news-prism-view/src/lib/db.ts)
-- [src/app/inspect/page.tsx](/Users/mk/Development/NewsPrismView/news-prism-view/src/app/inspect/page.tsx)
+- [shared/taxonomy/taxonomy.go](shared/taxonomy/taxonomy.go)
+- [batch/internal/pipeline/steps/classify.go](batch/internal/pipeline/steps/classify.go)
+- [batch/internal/pipeline/steps/group.go](batch/internal/pipeline/steps/group.go)
+- [src/types/index.ts](src/types/index.ts)
+- [src/lib/db.ts](src/lib/db.ts)
+- [src/app/(internal)/inspect/page.tsx](src/app/(internal)/inspect/page.tsx)

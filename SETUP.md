@@ -1,5 +1,7 @@
 # セットアップガイド
 
+> **注意（2026-06-11）**: バックエンドは Go（server / batch）へ移行済み。環境変数の正典は [`docs/ONBOARDING.md` §3](docs/ONBOARDING.md) を参照（Go 側は `LLM_BASE_URL` / `EMBED_BASE_URL` / `LLM_MODEL` 等を読む）。embedding は **1024次元の e5-large** が前提で、768次元モデル（`mxbai-embed-large`・`ruri-v3-310m` 等）は `vector(1024)` カラムに入らない。
+
 ## 前提条件
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
@@ -28,8 +30,8 @@ docker compose up
 
 ```bash
 # 事前に以下のモデルが pull されていること
-ollama pull llama3.2
-ollama pull ruri-v3-310m
+ollama pull gemma3:12b
+ollama pull bge-m3   # 1024次元の埋め込みモデル（vector(1024) に適合）
 
 docker compose -f docker-compose.local-ollama.yml up
 ```
@@ -85,16 +87,16 @@ cp .env.local.sample .env.local
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama サーバーの URL |
 | `OLLAMA_MODEL` | `gemma3:12b` | 3軸政治分析に使う LLM |
 | `CLASSIFY_MODEL` | `gemma3:4b` | ニュースカテゴリ分類に使う LLM |
-| `EMBED_MODEL` | `mxbai-embed-large` | テキスト埋め込みモデル（出力次元 768） |
+| `EMBED_MODEL` | `multilingual-e5-large-instruct-q8_0` | テキスト埋め込みモデル（出力次元 1024）。Ollama 利用時は `bge-m3` 等の 1024次元モデルを選ぶ |
 | `MULTI_MODELS` | `gemma3:12b,qwen3.5:4b,llama3.2` | マルチモデル分析モード用モデル一覧（カンマ区切り） |
 
 ### 類似度閾値
 
 | 変数 | デフォルト | 説明 |
 |---|---|---|
-| `GROUP_CLUSTER_THRESHOLD` | `0.72` | バッチグループ化でのクラスタリング閾値（高いほど厳密） |
-| `FEED_GROUP_SIMILARITY_THRESHOLD` | `0.68` | インクリメンタルグループ化でのマッチング閾値 |
-| `EMBED_CLASSIFY_THRESHOLD` | `0.5` | embedding 分類の confidence 閾値（未満は LLM にエスカレーション） |
+| `GROUP_CLUSTER_THRESHOLD` | `0.91` | バッチグループ化でのクラスタリング閾値（高いほど厳密） |
+| `FEED_GROUP_SIMILARITY_THRESHOLD` | `0.68` | インクリメンタルグループ化でのマッチング閾値（Go バッチでは未使用） |
+| `EMBED_CLASSIFY_THRESHOLD` | `0.8` | embedding 分類の confidence 閾値（未満は LLM にエスカレーション） |
 | `REFINE_INTRA_THRESHOLD` | `0.93` | クラスタ内 min 類似度がこれ以上なら coherent とみなし LLM 審査をスキップ |
 | `REFINE_INTER_THRESHOLD` | `0.92` | クラスタ間 centroid 類似度がこれ以上なら merge 候補として LLM 審査対象に |
 | `SKIP_REFINE` | `false` | `true` にすると refine ステップ（クラスタ品質審査）を完全スキップ。LLM 負荷を下げたい場合や高速実行したい場合に使用 |

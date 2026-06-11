@@ -1,3 +1,11 @@
+---
+status: current
+scope: feature:media
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # 日本大手メディア バイアス可視化 対象一覧 仕様
 
 ## 現状

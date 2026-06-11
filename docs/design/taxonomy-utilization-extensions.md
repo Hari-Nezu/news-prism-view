@@ -1,3 +1,11 @@
+---
+status: proposed
+scope: feature:taxonomy
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # 3層分類体系（Taxonomy）の拡張 設計
 
 ## まだ未実装

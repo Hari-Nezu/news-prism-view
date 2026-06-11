@@ -1,4 +1,19 @@
+---
+status: current
+scope: feature:batch-pipeline
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # バッチパイプライン設計（Go 実装）
+
+> **現状反映メモ（2026-06-11）**
+> - パイプラインは **8段**: `collect → embed → classify → group → refine → name → consensus → store`（当初の6段に refine / consensus を追加）。
+> - サブコマンドは `run` / `serve` / `eval` の3つ（eval は embedding モデル比較。`batch/EVAL_BATCH.md` 参照）。
+> - DB アクセスは `shared/db/`、LLM は `shared/llm/`、ステージ実装は `batch/internal/pipeline/steps/`（本書の旧ディレクトリ図 `internal/db`・`internal/llm` は廃止）。
+> - 読み取り API も含め **全 API は Go server（`server/internal/handler/`）へ移行済み**。本書末尾の「Next.js 側の変更」節は移行前の計画であり現状ではない。
+> - embedding は **e5-large（1024次元）** がデフォルト（migration 004）。
 
 ## 背景・動機
 
@@ -31,7 +46,7 @@
 │                                              │
 │  ┌─────────────────────────────────────────┐ │
 │  │ collect → embed → classify → group →    │ │
-│  │   name → store                          │ │
+│  │   refine → name → consensus → store     │ │                          │ │
 │  └─────────────────────────────────────────┘ │
 └──────────────────────┬───────────────────────┘
                        │ pgx

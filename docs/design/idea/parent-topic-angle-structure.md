@@ -1,4 +1,14 @@
+---
+status: proposed
+scope: feature:topic-structure
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # 親トピック / 子トピック（angle）構造メモ（2026-04-09）
+
+> **未実装の構想（2026-06-11 確認）**: `parentTopic` / `angle` の保存・表示は未実装。なお本書が前提とする「category hard gate を入れる」という方針は、その後の実装で**採用されず廃止**された（現状はカテゴリのソフトゲート＋ `dominantCate` の事後割り当て）。前提が現状と異なる点に注意して読むこと。
 
 ## 背景
 

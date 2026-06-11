@@ -1,4 +1,14 @@
+---
+status: proposed
+scope: feature:topic-timeline
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # トピック変遷追跡機能（Topic Timeline）
+
+> **未実装の提案（2026-06-11 確認）**: 本書は計画であり実装されていない。`topic_thread_id` カラム・`GetTopicTimeline()`・`GET /api/batch/topic-timeline` はコード・migration・Prisma のいずれにも存在しない。本文中の「`batch/migrations/004_topic_thread_id.sql`」は誤り — migration 004 は実際には `004_vector_1024_for_e5.sql`（embedding 次元変更）であり、本機能とは無関係。着手時は migration 番号の採り直しが必要。
 
 ## 背景・課題
 

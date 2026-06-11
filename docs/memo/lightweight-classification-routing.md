@@ -1,6 +1,16 @@
-# 軽量分類・ルーティング戦略 — 【DONE】
+---
+status: deprecated
+scope: feature:classify
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
 
-> **実装状況**: Go バッチの `classify.go` にて、**Embedding 類似度分類 → LLM フォールバック → キーワードフォールバック** の 3 段カスケードが実装済み。
+# 軽量分類・ルーティング戦略 — 【DONE / 廃止】
+
+> **廃止（2026-06-11）**: 本書は分類カスケードの検討メモ。実装は完了し、正典は **[`docs/spec/news-categorization.md`](../spec/news-categorization.md)** に移った。本書の本文は Next.js `topic-classifier.ts`・`nomic-embed-text`・Ollama を前提とした旧記述（現状は Go `batch/internal/pipeline/steps/classify.go`、embedding は e5-large）で、経緯としてのみ残す。
+>
+> 旧記述: Go バッチの `classify.go` にて Embedding 類似度分類 → LLM フォールバック → キーワードフォールバックの 3 段カスケードが実装済み。
 
 ---
 
