@@ -1,3 +1,11 @@
+---
+status: current
+scope: feature:summary
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # まとめ画面 仕様
 
 ## 現状
@@ -5,7 +13,7 @@
 まとめ画面で実装済み機能は主に次の2つ。
 
 1. **最新 snapshot の表示**
-   - `src/app/ranking/page.tsx`
+   - `src/app/(public)/ranking/page.tsx`
    - `GET /api/batch/latest` で snapshot 読み込み
    - `POST /api/batch/run` でバッチ起動
 

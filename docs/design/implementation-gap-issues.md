@@ -1,3 +1,11 @@
+---
+status: partial
+scope: system
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # 実装 Gap・未実装課題一覧
 
 ## 未実装だが issue 化すべき内容

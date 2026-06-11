@@ -1,3 +1,11 @@
+---
+status: current
+scope: feature:persistence
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # RSS記事永続化仕様
 
 ## 現状
@@ -32,7 +40,7 @@ Prisma 論理名は `RssArticle`、物理テーブル名は `rss_articles`。
 
 ## Next.js 側の upsert
 
-[db.ts](/Users/mk/Development/NewsPrismView/news-prism-view/src/lib/db.ts) に `upsertRssArticles()` がある。
+[db.ts](src/lib/db.ts) に `upsertRssArticles()` がある。
 
 挙動:
 

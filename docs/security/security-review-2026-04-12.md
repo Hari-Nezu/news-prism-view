@@ -1,3 +1,11 @@
+---
+status: current
+scope: feature:security
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # Security Review Report — 2026-04-12
 
 Go API Server (Phase 2) の セキュリティレビュー結果

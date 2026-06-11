@@ -1,3 +1,11 @@
+---
+status: draft
+scope: feature:clustering
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # グルーピング：別グループへの合流問題
 
 ## 現象

@@ -1,3 +1,11 @@
+---
+status: current
+scope: feature:clustering
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # 現行クラスタリング vs BERTopic 比較
 
 ## 現行ロジック: Greedy Cosine Clustering + LLM Refine

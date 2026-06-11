@@ -1,3 +1,11 @@
+---
+status: partial
+scope: feature:api-server
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # newsprism-server
 
 Next.js フロントエンドと batch サーバーの間に立つ API サーバー。記事分析（LLM）、RSS/YouTube フィード取得、比較分析、バッチ結果参照、履歴・類似検索を提供する。
@@ -23,7 +31,7 @@ go run ./cmd/newsprism-server
 | `EMBED_BASE_URL` | `http://127.0.0.1:8081` | 埋め込みモデル用サーバー |
 | `LLM_MODEL` | `gemma-4-E4B-it-Q8_0` | 分析用チャットモデル |
 | `CLASSIFY_MODEL` | `gemma-4-E4B-it-Q8_0` | 分類用チャットモデル |
-| `EMBED_MODEL` | `Targoyle/ruri-v3-310m-GGUF:Q8_0` | 埋め込みモデル |
+| `EMBED_MODEL` | `multilingual-e5-large-instruct-q8_0` | 埋め込みモデル（1024次元） |
 | `API_PORT` | `8091` | サーバーポート |
 | `BATCH_SERVER_URL` | `http://127.0.0.1:8090` | batch サーバーのURL |
 | `FEEDS_YAML_PATH` | `feeds.yaml` | フィード定義ファイルパス |
@@ -64,6 +72,8 @@ go run ./cmd/newsprism-server
 | `POST` | `/api/batch/run` | batch サーバーへパイプライン実行を中継 |
 | `GET` | `/api/batch/inspect?groupId=` | グループ詳細（記事一覧 + メタデータ） |
 | `POST` | `/api/batch/inspect/recompute` | グループの類似度再計算 |
+| `POST` | `/api/batch/inspect/regroup/suggest` | LLM に記事の移動先候補を判定させる |
+| `POST` | `/api/batch/inspect/regroup/apply` | 提案に基づき記事の移動を実行する |
 
 ### 履歴・類似検索
 

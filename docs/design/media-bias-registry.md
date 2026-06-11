@@ -1,3 +1,11 @@
+---
+status: proposed
+scope: feature:media-bias
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # 媒体バイアス・スタンス分析 設計
 
 ## 概要

@@ -1,4 +1,14 @@
+---
+status: current
+scope: feature:clustering
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # BERTopic サブプロセス実装設計
+
+> **実装済み（2026-06-11）**: 本設計は実装されている（`batch/internal/pipeline/steps/group_bertopic.go`、`scripts/bertopic_cluster.py`、`USE_BERTOPIC` フラグ、`BERTopicConfig`）。既定は `USE_BERTOPIC=false`（greedy）。運用ガイドは [`docs/guide/clustering-tuning-playbook.md`](../guide/clustering-tuning-playbook.md)。
 
 ## 概要
 

@@ -1,4 +1,14 @@
+---
+status: current
+scope: feature:inspect
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # グルーピング点検・修正 仕様
+
+> **現状反映（2026-06-11）**: inspect 系 API は **Go server**（`server/internal/handler/batch.go`・`register.go`）で提供する。本書中の `src/app/api/batch/inspect/...route.ts`・`db.ts` という記述は Next.js 時代のもので、現在は該当ファイルは存在しない（DB アクセスは `shared/db/snapshots.go`）。自動 issue 検出も Go 側で行う。記事の手動移動（regroup）は [`inspect-regroup.md`](./inspect-regroup.md) を参照。
 
 ## 概要
 
@@ -19,7 +29,7 @@
 
 ### 1. `/inspect` ページ
 
-`src/app/inspect/page.tsx` は実装済み。
+`src/app/(internal)/inspect/page.tsx` は実装済み。
 - `feed` タブ: `FeedGroup` の一覧確認
 - `snapshot` タブ: バッチ結果の `SnapshotGroup` 一覧確認
 

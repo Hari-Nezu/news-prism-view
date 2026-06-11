@@ -1,3 +1,11 @@
+---
+status: current
+scope: feature:coverage
+authoritative: false
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # カバレッジマトリクス・オーバーレイ比較機能
 
 ## 概要

@@ -1,3 +1,11 @@
+---
+status: partial
+scope: feature:public-private
+authoritative: true
+last_verified: 2026-06-11
+verified_against: main@f57460c
+---
+
 # Public / Private 分離設計
 
 ## 方針
